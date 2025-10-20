@@ -119,8 +119,8 @@ class CalibrationWindow:
             wavelength_entry.pack(side=tk.LEFT, padx=5)
 
             # Bind updates to preview
-            pixel_var.trace("w", lambda *args: self.update_preview())
-            wavelength_var.trace("w", lambda *args: self.update_preview())
+            pixel_var.trace_add("write", lambda *args: self.update_preview())
+            wavelength_var.trace_add("write", lambda *args: self.update_preview())
 
             self.point_vars.append({"pixel": pixel_var, "wavelength": wavelength_var})
 

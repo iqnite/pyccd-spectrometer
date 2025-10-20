@@ -162,8 +162,8 @@ class buildpanel(tk.Frame):
         self.edevice.grid(column=1, row=device_row)
         self.ldevicestatus = tk.Label(self, textvariable=self.device_status, fg="green")
         # setup trace to check if the device exists
-        self.device_address.trace(
-            "w",
+        self.device_address.trace_add(
+            "write",
             lambda name, index, mode, Device=self.device_address, status=self.device_status, colr=self.ldevicestatus: self.DEVcallback(
                 name, index, mode, Device, status, colr
             ),
@@ -181,7 +181,7 @@ class buildpanel(tk.Frame):
             state="readonly",
         )
         self.firmware_dropdown.grid(column=1, row=device_row + 2)
-        self.firmware_type.trace("w", self.update_firmware)
+        self.firmware_type.trace_add("write", self.update_firmware)
         # help button
         self.bhdev = tk.Button(
             self, text="?", command=lambda helpfor=0: CCDhelp.helpme(helpfor)
@@ -629,14 +629,14 @@ class buildpanel(tk.Frame):
         self.cshowcolors.grid(column=1, row=plotmode_row + 2)
 
         # setup traces to update the plot
-        self.invert.trace(
-            "w",
+        self.invert.trace_add(
+            "write",
             lambda name, index, mode, invert=self.invert, CCDplot=CCDplot: self.RAWcallback(
                 name, index, mode, invert, CCDplot
             ),
         )
-        self.balanced.trace(
-            "w",
+        self.balanced.trace_add(
+            "write",
             lambda name, index, mode, balanced=self.balanced, CCDplot=CCDplot: self.BALcallback(
                 name, index, mode, balanced, CCDplot
             ),
