@@ -8,6 +8,7 @@ from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.figure import Figure
 from spectrometer import config
 from spectrometer.calibration import apply as apply_calibration
+from spectrometer.spectrum_gradient import update_spectrum_background
 
 
 class buildplot(tk.Frame):
@@ -64,8 +65,6 @@ class buildplot(tk.Frame):
     def update_spectrum_background(self):
         """Update spectrum background based on current settings"""
         try:
-            from spectrum_gradient import update_spectrum_background
-
             # Get current settings
             current_spectroscopy_mode = config.spectroscopy_mode
             current_show_colors = getattr(self, "show_colors", False)

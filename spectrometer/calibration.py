@@ -211,6 +211,7 @@ class CalibrationWindow:
             self.ax.set_ylabel("Wavelength (nm)")
             self.canvas.draw()
             self.update_status(f"Invalid points: Check input values", is_error=True)
+            print(e)
 
     def get_points_from_ui(self):
         """Get calibration points from UI fields"""
@@ -253,7 +254,7 @@ class CalibrationWindow:
             if self.on_apply_callback:
                 self.on_apply_callback()
         except Exception as e:
-            self.update_status(f"Error applying calibration", is_error=True)
+            self.update_status(f"Error applying calibration: {e}", is_error=True)
 
     def save_calibration(self):
         """Save calibration without applying"""
@@ -273,7 +274,7 @@ class CalibrationWindow:
             else:
                 self.update_status("Could not save calibration file", is_error=True)
         except Exception as e:
-            self.update_status(f"Error saving calibration", is_error=True)
+            self.update_status(f"Error saving calibration: {e}", is_error=True)
 
     def reset_defaults(self):
         """Reset to default calibration points"""
