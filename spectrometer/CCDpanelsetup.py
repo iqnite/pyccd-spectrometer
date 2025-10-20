@@ -30,7 +30,8 @@ import numpy as np
 import serial
 import math
 
-from spectrometer import config, CCDhelp, CCDserial, CCDfiles, calibration
+from spectrometer import config, CCDhelp, CCDserial, CCDfiles
+from spectrometer.calibration import default_calibration
 
 
 class buildpanel(tk.Frame):
@@ -108,7 +109,7 @@ class buildpanel(tk.Frame):
 
         if config.spectroscopy_mode:
             # Auto-open calibration window in spectroscopy mode
-            calibration.open_calibration_window(
+            default_calibration.open_calibration_window(
                 self.master, on_apply_callback=self.CCDplot.replot_current_spectrum
             )
 
@@ -124,8 +125,10 @@ class buildpanel(tk.Frame):
         if hasattr(self.CCDplot, "a") and self.CCDplot.a is not None:
             if config.spectroscopy_mode:
                 # Use wavelength calibration for spectroscopy mode
-                if hasattr(calibration, "apply") and callable(calibration.apply):
-                    x_values = calibration.apply(np.arange(3694))
+                if hasattr(default_calibration, "apply") and callable(
+                    default_calibration.apply
+                ):
+                    x_values = default_calibration.apply(np.arange(3694))
                     x_label = "Wavelength (nm)"
                     # Normal direction: lower wavelengths on left, higher on right
                     self.CCDplot.a.set_xlim(
@@ -258,24 +261,28 @@ class buildpanel(tk.Frame):
         self.tint_unit.trace_add("write", self.calculate_timings)
         self.SH.trace_add(
             "write",
-            lambda *args: self.ICGSHcallback(
-                *args,
+            lambda name, index, mode: self.ICGSHcallback(
+                name,
+                index,
+                mode,
                 self.tint_status,
                 self.tint_statuscolor,
                 self.lccdstatus,
                 self.SH,
-                self.ICG
+                self.ICG,
             ),
         )
         self.ICG.trace_add(
             "write",
-            lambda *args: self.ICGSHcallback(
-                *args,
+            lambda name, index, mode: self.ICGSHcallback(
+                name,
+                index,
+                mode,
                 self.tint_status,
                 self.tint_statuscolor,
                 self.lccdstatus,
                 self.SH,
-                self.ICG
+                self.ICG,
             ),
         )
 
@@ -463,8 +470,10 @@ class buildpanel(tk.Frame):
         # Choose x-axis based on mode
         if config.spectroscopy_mode:
             # Use wavelength calibration for spectroscopy mode
-            if hasattr(calibration, "apply") and callable(calibration.apply):
-                x_values = calibration.apply(np.arange(3694))
+            if hasattr(default_calibration, "apply") and callable(
+                default_calibration.apply
+            ):
+                x_values = default_calibration.apply(np.arange(3694))
                 x_label = "Wavelength (nm)"
             else:
                 # Fallback to pixels if no calibration
@@ -478,8 +487,8 @@ class buildpanel(tk.Frame):
         # Set axis limits based on mode - FIXED: Normal direction for spectroscopy
         if (
             config.spectroscopy_mode
-            and hasattr(calibration, "apply")
-            and callable(calibration.apply)
+            and hasattr(default_calibration, "apply")
+            and callable(default_calibration.apply)
         ):
             # Normal direction for spectroscopy: lower wavelengths on left, higher on right
             CCDplot.a.set_xlim(x_values[0], x_values[-1])
@@ -690,7 +699,7 @@ class buildpanel(tk.Frame):
 
     def open_calibration(self):
         """Open calibration window with proper callback reference"""
-        calibration.open_calibration_window(
+        default_calibration.open_calibration_window(
             self.master, on_apply_callback=self.CCDplot.replot_current_spectrum
         )
 

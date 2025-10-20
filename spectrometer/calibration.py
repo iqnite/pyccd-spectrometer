@@ -10,7 +10,7 @@ from matplotlib.figure import Figure
 CALIBRATION_FILE = "calibration_params.json"
 
 # Default calibration points (your original 4-point polynomial)
-default_calibration = {
+default_calibration_data = {
     "points": [
         {"pixel": 0, "wavelength": 350.0},
         {"pixel": 1231, "wavelength": 532.0},
@@ -19,48 +19,51 @@ default_calibration = {
     ]
 }
 
-# Global calibration data
-calibration_data = default_calibration.copy()
 
+class Calibration:
+    def __init__(self, data: dict[str, list[dict[str, float]]]):
+        self.calibration_data = data.copy()
 
-def load_calibration():
-    """Load calibration from file"""
-    global calibration_data
-    try:
-        if os.path.exists(CALIBRATION_FILE):
-            with open(CALIBRATION_FILE, "r") as f:
-                calibration_data = json.load(f)
-                # Ensure we have exactly 4 points
-                if len(calibration_data.get("points", [])) != 4:
-                    calibration_data = default_calibration.copy()
-                    save_calibration()
-    except:
-        calibration_data = default_calibration.copy()
+    def load(self):
+        """Load calibration from file"""
+        try:
+            if os.path.exists(CALIBRATION_FILE):
+                with open(CALIBRATION_FILE, "r") as f:
+                    calibration_data = json.load(f)
+                    # Ensure we have exactly 4 points
+                    if len(calibration_data.get("points", [])) != 4:
+                        calibration_data = default_calibration_data.copy()
+                        self.save()
+        except:
+            calibration_data = default_calibration_data.copy()
 
+    def save(self):
+        """Save calibration to file"""
+        try:
+            with open(CALIBRATION_FILE, "w") as f:
+                json.dump(self.calibration_data, f, indent=4)
+            return True
+        except:
+            return False
 
-def save_calibration():
-    """Save calibration to file"""
-    try:
-        with open(CALIBRATION_FILE, "w") as f:
-            json.dump(calibration_data, f, indent=4)
-        return True
-    except:
-        return False
+    def apply(self, pixels):
+        """Apply 4-point polynomial calibration (your original function)"""
+        points = self.calibration_data["points"]
 
+        # Extract pixel and wavelength values
+        pixel_vals = [point["pixel"] for point in points]
+        wavelength_vals = [point["wavelength"] for point in points]
 
-def apply(pixels):
-    """Apply 4-point polynomial calibration (your original function)"""
-    points = calibration_data["points"]
+        # Fit 3rd degree polynomial (4 points = 3rd degree)
+        coefficients = np.polyfit(pixel_vals, wavelength_vals, 3)
+        polynomial = np.poly1d(coefficients)
 
-    # Extract pixel and wavelength values
-    pixel_vals = [point["pixel"] for point in points]
-    wavelength_vals = [point["wavelength"] for point in points]
+        return polynomial(pixels)
 
-    # Fit 3rd degree polynomial (4 points = 3rd degree)
-    coefficients = np.polyfit(pixel_vals, wavelength_vals, 3)
-    polynomial = np.poly1d(coefficients)
-
-    return polynomial(pixels)
+    def open_calibration_window(self, parent, on_apply_callback=None):
+        """Open calibration window"""
+        self.load()  # Load saved calibration
+        return CalibrationWindow(parent, self, on_apply_callback)
 
 
 def calculate_calibration_curve(points):
@@ -79,8 +82,9 @@ def calculate_calibration_curve(points):
 
 
 class CalibrationWindow:
-    def __init__(self, parent, on_apply_callback=None):
+    def __init__(self, parent, calibration: Calibration, on_apply_callback=None):
         self.parent = parent
+        self.calibration = calibration
         self.on_apply_callback = on_apply_callback
         self.window = tk.Toplevel(parent)
         self.window.title("CCD Calibration")
@@ -102,7 +106,7 @@ class CalibrationWindow:
 
         # Create input fields for 4 points
         labels = ["Pixel:", "Wavelength (nm):"]
-        for i, point in enumerate(calibration_data["points"]):
+        for i, point in enumerate(self.calibration.calibration_data["points"]):
             point_frame = ttk.Frame(points_frame)
             point_frame.pack(fill=tk.X, pady=2)
 
@@ -227,13 +231,12 @@ class CalibrationWindow:
 
         # Ensure we have exactly 4 points, otherwise use defaults
         if len(points) != 4:
-            points = default_calibration["points"]
+            points = default_calibration_data["points"]
 
         return points
 
     def apply_calibration(self):
         """Apply calibration and auto-save"""
-        global calibration_data
         try:
             points = self.get_points_from_ui()
             # Validate points
@@ -243,8 +246,8 @@ class CalibrationWindow:
                 )
                 return
 
-            calibration_data["points"] = points
-            if save_calibration():
+            self.calibration.calibration_data["points"] = points
+            if self.calibration.save():
                 self.update_status("Calibration applied and saved successfully!")
             else:
                 self.update_status(
@@ -258,7 +261,6 @@ class CalibrationWindow:
 
     def save_calibration(self):
         """Save calibration without applying"""
-        global calibration_data
         try:
             points = self.get_points_from_ui()
             # Validate points
@@ -268,8 +270,8 @@ class CalibrationWindow:
                 )
                 return
 
-            calibration_data["points"] = points
-            if save_calibration():
+            self.calibration.calibration_data["points"] = points
+            if self.calibration.save():
                 self.update_status("Calibration saved successfully!")
             else:
                 self.update_status("Could not save calibration file", is_error=True)
@@ -279,19 +281,14 @@ class CalibrationWindow:
     def reset_defaults(self):
         """Reset to default calibration points"""
         for i, point_vars in enumerate(self.point_vars):
-            point_vars["pixel"].set(str(default_calibration["points"][i]["pixel"]))
+            point_vars["pixel"].set(str(default_calibration_data["points"][i]["pixel"]))
             point_vars["wavelength"].set(
-                str(default_calibration["points"][i]["wavelength"])
+                str(default_calibration_data["points"][i]["wavelength"])
             )
         self.update_preview()
         self.update_status("Reset to default calibration points")
 
 
-def open_calibration_window(parent, on_apply_callback=None):
-    """Open calibration window"""
-    load_calibration()  # Load saved calibration
-    return CalibrationWindow(parent, on_apply_callback)
-
-
 # Load calibration when module starts
-load_calibration()
+default_calibration = Calibration(default_calibration_data)
+default_calibration.load()

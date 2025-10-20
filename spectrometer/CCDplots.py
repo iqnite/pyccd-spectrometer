@@ -6,8 +6,7 @@ matplotlib.use("TkAgg")
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.figure import Figure
-from spectrometer import config
-from spectrometer.calibration import apply as apply_calibration
+from spectrometer import config, calibration
 from spectrometer.spectrum_gradient import update_spectrum_background
 
 
@@ -166,7 +165,7 @@ class buildplot(tk.Frame):
 
         # Choose x-axis based on mode
         if config.spectroscopy_mode:
-            x_values = apply_calibration(np.arange(len(ccd_data)))
+            x_values = calibration.default_calibration.apply(np.arange(len(ccd_data)))
             x_label = "Wavelength (nm)"
         else:
             x_values = np.arange(len(ccd_data))

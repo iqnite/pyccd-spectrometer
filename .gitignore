@@ -2,3 +2,4 @@
 .venv*/
 *.pyc
 .coverage
+calibration_params.json
