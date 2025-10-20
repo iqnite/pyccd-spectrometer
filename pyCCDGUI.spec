@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['main.py'],
+    ['pyCCDGUI.py'],
     pathex=[],
     binaries=[],
     datas=[],
