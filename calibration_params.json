@@ -1,0 +1,20 @@
+{
+    "points": [
+        {
+            "pixel": 0,
+            "wavelength": 350.0
+        },
+        {
+            "pixel": 1200,
+            "wavelength": 550.0
+        },
+        {
+            "pixel": 2400,
+            "wavelength": 700.0
+        },
+        {
+            "pixel": 3693,
+            "wavelength": 750.0
+        }
+    ]
+}
