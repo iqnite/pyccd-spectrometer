@@ -48,7 +48,7 @@ def openfile(self, CCDplot):
                 if line_count > 3:
                     config.rxData16[line_count - 4] = int(row[1])
                 line_count += 1
-        CCDpanelsetup.buildpanel.updateplot(self, CCDplot)
+        CCDpanelsetup.BuildPanel.updateplot(self, CCDplot)
 
     except IOError:
         messagebox.showerror(

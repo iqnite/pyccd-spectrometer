@@ -34,7 +34,7 @@ from spectrometer import config, CCDhelp, CCDserial, CCDfiles
 from spectrometer.calibration import default_calibration
 
 
-class buildpanel(tk.Frame):
+class BuildPanel(tk.Frame):
     def __init__(self, master, CCDplot, SerQueue):
         # geometry-rows for packing the grid
         mode_row = 5
@@ -48,7 +48,7 @@ class buildpanel(tk.Frame):
         update_row = 85
         progress_var = tk.IntVar()
 
-        tk.Frame.__init__(self, master)
+        super().__init__(master)
 
         # Store CCDplot reference for callbacks
         self.CCDplot = CCDplot

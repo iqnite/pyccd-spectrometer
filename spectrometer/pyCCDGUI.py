@@ -22,7 +22,7 @@ def main():
     # Build menu, plot frame, and control panel
     menu = CCDmenusetup.buildmenu(root)
     CCDplot = CCDplots.buildplot(root)
-    panel = CCDpanelsetup.buildpanel(root, CCDplot, SerQueue)
+    panel = CCDpanelsetup.BuildPanel(root, CCDplot, SerQueue)
 
     # Configure root window for expansion
     root.grid_rowconfigure(0, weight=1)
