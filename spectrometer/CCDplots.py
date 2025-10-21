@@ -1,5 +1,6 @@
 import matplotlib
 import numpy as np
+import tkinter as tk
 from tkinter import ttk
 
 matplotlib.use("TkAgg")
@@ -30,6 +31,15 @@ class BuildPlot(ttk.Frame):
         toolbarFrame = ttk.Frame(master=self)
         toolbarFrame.grid(row=1, column=0, sticky="ew")
         self.navigation_toolbar = NavigationToolbar2Tk(self.canvas, toolbarFrame)
+
+        # Override toolbar colors to force light mode
+        try:
+            for child in self.navigation_toolbar.winfo_children():
+                if isinstance(child, (tk.Button, tk.Checkbutton)):
+                    child.configure(bg="lightgray", activebackground="gray")
+                    child.update()
+        except Exception as e:
+            print(f"Could not set toolbar colors: {e}")
 
         self.current_data = None  # store last spectrum
 
