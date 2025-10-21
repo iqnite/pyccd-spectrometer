@@ -73,6 +73,9 @@ class BuildPanel(ttk.Frame):
         self.plotmodefields(plotmode_row, CCDplot)
         self.saveopenfields(save_row, CCDplot)
         self.updateplotfields(update_row, CCDplot)
+        # vertical space
+        self.grid_rowconfigure(update_row + 2, minsize=20)
+        self.aboutbutton(update_row + 3)
 
     def mode_fields(self, mode_row):
         """Add spectroscopy mode toggle"""
@@ -722,3 +725,11 @@ class BuildPanel(ttk.Frame):
     def callback(self):
         self.bopen.config(state=tk.DISABLED)
         return ()
+
+    def aboutbutton(self, about_row):
+        self.babout = ttk.Button(
+            self,
+            text="About",
+            command=lambda helpfor=10: CCDhelp.helpme(helpfor),
+        )
+        self.babout.grid(row=about_row, columnspan=3, sticky="EW", padx=5)

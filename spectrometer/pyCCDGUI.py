@@ -2,27 +2,27 @@ import tkinter as tk
 import queue
 import sv_ttk
 
-from spectrometer import CCDmenusetup, CCDpanelsetup, CCDplots
+from spectrometer import CCDpanelsetup, CCDplots
 
 
 def main():
     root = tk.Tk()
     root.title("The Otter pyCCDGUI")
-    sv_ttk.set_theme("dark")
+    root.state("zoomed")
+    sv_ttk.set_theme("light")
 
-    # Fullscreen setup
-    root.attributes("-fullscreen", True)
+    def enter_fullscreen(event=None):
+        root.attributes("-fullscreen", True)
 
-    # Add Escape key to exit fullscreen
     def quit_fullscreen(event=None):
         root.attributes("-fullscreen", False)
 
+    root.bind("<F11>", enter_fullscreen)
     root.bind("<Escape>", quit_fullscreen)
 
     SerQueue = queue.Queue()
 
     # Build menu, plot frame, and control panel
-    menu = CCDmenusetup.BuildMenu(root)
     CCDplot = CCDplots.BuildPlot(root)
     panel = CCDpanelsetup.BuildPanel(root, CCDplot, SerQueue)
 
