@@ -29,10 +29,9 @@ from spectrometer import CCDhelp
 from sys import exit
 
 
-class buildmenu(tk.Frame):
-
+class BuildMenu(tk.Frame):
     def __init__(self, master: tk.Tk):
-        tk.Frame.__init__(self, master)
+        super().__init__(master)
 
         self.menubar = tk.Menu(master)
 

@@ -10,9 +10,9 @@ from spectrometer import config, calibration
 from spectrometer.spectrum_gradient import update_spectrum_background
 
 
-class buildplot(tk.Frame):
+class BuildPlot(tk.Frame):
     def __init__(self, master):
-        tk.Frame.__init__(self, master)
+        super().__init__(master)
 
         # Configure this frame to expand
         self.grid_rowconfigure(0, weight=1)

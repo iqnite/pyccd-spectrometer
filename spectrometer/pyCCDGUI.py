@@ -20,8 +20,8 @@ def main():
     SerQueue = queue.Queue()
 
     # Build menu, plot frame, and control panel
-    menu = CCDmenusetup.buildmenu(root)
-    CCDplot = CCDplots.buildplot(root)
+    menu = CCDmenusetup.BuildMenu(root)
+    CCDplot = CCDplots.BuildPlot(root)
     panel = CCDpanelsetup.BuildPanel(root, CCDplot, SerQueue)
 
     # Configure root window for expansion
