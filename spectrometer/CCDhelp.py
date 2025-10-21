@@ -381,6 +381,10 @@ def helpme(helpfor):
 
     elif helpfor == 10:  # about
         helptext.insert(tk.END, "About\n", "h1")
+        helptext.insert(
+            tk.END,
+            "\nVersion: 1.0.0-development\n",
+        )
         helptext.insert(tk.END, "\nCopyright (c) 2019 Esben Rossel")
         helptext.insert(tk.END, "\nAll rights reserved.\n")
         helptext.insert(tk.END, "\nAuthor: Esben Rossel <esbenrossel@gmail.com>\n")
