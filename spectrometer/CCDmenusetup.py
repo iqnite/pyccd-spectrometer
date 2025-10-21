@@ -24,16 +24,16 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
-import tkinter as tk
+import tkinter as ttk
 from spectrometer import CCDhelp
 from sys import exit
 
 
-class BuildMenu(tk.Frame):
-    def __init__(self, master: tk.Tk):
+class BuildMenu(ttk.Frame):
+    def __init__(self, master: ttk.Tk):
         super().__init__(master)
 
-        self.menubar = tk.Menu(master)
+        self.menubar = ttk.Menu(master)
 
         self.menubar.add_command(label="Exit", command=exit)
         self.menubar.add_command(

@@ -88,7 +88,7 @@ class CalibrationWindow:
         self.on_apply_callback = on_apply_callback
         self.window = tk.Toplevel(parent)
         self.window.title("CCD Calibration")
-        self.window.geometry("600x600")
+        self.window.geometry("600x650")
 
         self.point_vars = []
         self.create_widgets()
@@ -143,7 +143,7 @@ class CalibrationWindow:
         # Status message at the bottom
         self.status_var = tk.StringVar()
         self.status_var.set("Ready")
-        self.status_label = ttk.Label(
+        self.status_label = tk.Label(
             main_frame, textvariable=self.status_var, foreground="green"
         )
         self.status_label.pack(pady=5)

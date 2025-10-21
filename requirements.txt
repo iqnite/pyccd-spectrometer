@@ -1,3 +1,4 @@
-pyserial
-numpy
 matplotlib
+numpy
+pyserial
+sv-ttk

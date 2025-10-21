@@ -1,4 +1,4 @@
-import tkinter as tk
+import tkinter as ttk
 import matplotlib
 import numpy as np
 
@@ -10,7 +10,7 @@ from spectrometer import config, calibration
 from spectrometer.spectrum_gradient import update_spectrum_background
 
 
-class BuildPlot(tk.Frame):
+class BuildPlot(ttk.Frame):
     def __init__(self, master):
         super().__init__(master)
 
@@ -27,7 +27,7 @@ class BuildPlot(tk.Frame):
         # Use sticky="nsew" to make canvas expand
         self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
 
-        toolbarFrame = tk.Frame(master=self)
+        toolbarFrame = ttk.Frame(master=self)
         toolbarFrame.grid(row=1, column=0, sticky="ew")
         NavigationToolbar2Tk(self.canvas, toolbarFrame)
 

@@ -30,7 +30,7 @@ import serial
 
 from spectrometer import config
 import threading
-import tkinter as tk
+import tkinter as ttk
 import time
 
 
@@ -222,31 +222,31 @@ def rxtxcancel(SerQueue):
 
 
 def panelsleep(panel):
-    panel.bstop.config(state=tk.NORMAL)
-    panel.bopen.config(state=tk.DISABLED)
-    panel.bsave.config(state=tk.DISABLED)
-    panel.bcollect.config(state=tk.DISABLED)
-    panel.AVGscale.config(state=tk.DISABLED)
-    panel.rcontinuous.config(state=tk.DISABLED)
-    panel.roneshot.config(state=tk.DISABLED)
-    panel.eICG.config(state=tk.DISABLED)
-    panel.eSH.config(state=tk.DISABLED)
-    panel.edevice.config(state=tk.DISABLED)
-    panel.cinvert.config(state=tk.DISABLED)
-    panel.cbalance.config(state=tk.DISABLED)
+    panel.bstop.config(state=ttk.NORMAL)
+    panel.bopen.config(state=ttk.DISABLED)
+    panel.bsave.config(state=ttk.DISABLED)
+    panel.bcollect.config(state=ttk.DISABLED)
+    panel.AVGscale.config(state=ttk.DISABLED)
+    panel.rcontinuous.config(state=ttk.DISABLED)
+    panel.roneshot.config(state=ttk.DISABLED)
+    panel.eICG.config(state=ttk.DISABLED)
+    panel.eSH.config(state=ttk.DISABLED)
+    panel.edevice.config(state=ttk.DISABLED)
+    panel.cinvert.config(state=ttk.DISABLED)
+    panel.cbalance.config(state=ttk.DISABLED)
 
 
 def panelwakeup(panel):
-    panel.bstop.config(state=tk.DISABLED)
-    panel.bopen.config(state=tk.NORMAL)
-    panel.bsave.config(state=tk.NORMAL)
-    panel.bcollect.config(state=tk.NORMAL)
-    panel.AVGscale.config(state=tk.NORMAL)
-    panel.rcontinuous.config(state=tk.NORMAL)
-    panel.roneshot.config(state=tk.NORMAL)
-    panel.eICG.config(state=tk.NORMAL)
-    panel.eSH.config(state=tk.NORMAL)
-    panel.edevice.config(state=tk.NORMAL)
-    panel.cinvert.config(state=tk.NORMAL)
+    panel.bstop.config(state=ttk.DISABLED)
+    panel.bopen.config(state=ttk.NORMAL)
+    panel.bsave.config(state=ttk.NORMAL)
+    panel.bcollect.config(state=ttk.NORMAL)
+    panel.AVGscale.config(state=ttk.NORMAL)
+    panel.rcontinuous.config(state=ttk.NORMAL)
+    panel.roneshot.config(state=ttk.NORMAL)
+    panel.eICG.config(state=ttk.NORMAL)
+    panel.eSH.config(state=ttk.NORMAL)
+    panel.edevice.config(state=ttk.NORMAL)
+    panel.cinvert.config(state=ttk.NORMAL)
     if config.datainvert == 1:
-        panel.cbalance.config(state=tk.NORMAL)
+        panel.cbalance.config(state=ttk.NORMAL)
