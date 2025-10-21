@@ -1,7 +1,7 @@
 import tkinter as tk
 import queue
-import sv_ttk
 
+import sv_ttk
 from spectrometer import CCDpanelsetup, CCDplots
 
 
@@ -9,7 +9,7 @@ def main():
     root = tk.Tk()
     root.title("The Otter pyCCDGUI")
     root.state("zoomed")
-    sv_ttk.set_theme("light")
+    sv_ttk.set_theme("dark")
 
     def enter_fullscreen(event=None):
         root.attributes("-fullscreen", True)
