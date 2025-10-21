@@ -566,9 +566,9 @@ class BuildPanel(ttk.Frame):
             command=self.AVGcallback,
         )
         self.AVGscale.grid(column=1, row=avg_row)
-        self.AVGscale.set(config.AVGn[1])
         self.AVGlabel = ttk.Label(self)
         self.AVGlabel.grid(column=2, row=avg_row)
+        self.AVGscale.set(config.AVGn[1])
         self.AVGlabel.config(text=str(config.AVGn[1]))
         # help button
         self.bhavg = ttk.Button(
