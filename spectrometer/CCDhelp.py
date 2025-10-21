@@ -37,6 +37,7 @@ def helpme(helpfor):
     scrolling.config(command=helptext.yview)
     helptext.config(yscrollcommand=scrolling.set)
 
+    helptext.config(font=("Arial", 10))
     helptext.tag_configure("it", font=("Arial", 10, "italic"))
     helptext.tag_configure("h1", font=("Verdana", 16, "bold"))
     helptext.tag_configure("h2", font=("Verdana", 12, "bold"))
