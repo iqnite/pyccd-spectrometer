@@ -163,9 +163,7 @@ class BuildPanel(ttk.Frame):
         self.ldevice.grid(column=0, row=device_row)
         self.edevice = ttk.Entry(self, textvariable=self.device_address, justify="left")
         self.edevice.grid(column=1, row=device_row)
-        self.ldevicestatus = tk.Label(
-            self, textvariable=self.device_status, fg="green"
-        )
+        self.ldevicestatus = tk.Label(self, textvariable=self.device_status, fg="green")
         # setup trace to check if the device exists
         self.device_address.trace_add(
             "write",
@@ -409,6 +407,7 @@ class BuildPanel(ttk.Frame):
 
     def AVGcallback(self, AVGscale):
         config.AVGn[1] = np.uint8(self.AVGscale.get())
+        self.AVGlabel.config(text=str(config.AVGn[1]))
 
     def RAWcallback(self, name, index, mode, invert, CCDplot):
         config.datainvert = invert.get()
@@ -568,6 +567,9 @@ class BuildPanel(ttk.Frame):
         )
         self.AVGscale.grid(column=1, row=avg_row)
         self.AVGscale.set(config.AVGn[1])
+        self.AVGlabel = ttk.Label(self)
+        self.AVGlabel.grid(column=2, row=avg_row)
+        self.AVGlabel.config(text=str(config.AVGn[1]))
         # help button
         self.bhavg = ttk.Button(
             self, text="?", command=lambda helpfor=3: CCDhelp.helpme(helpfor)
