@@ -1,6 +1,6 @@
-import tkinter as ttk
 import matplotlib
 import numpy as np
+from tkinter import ttk
 
 matplotlib.use("TkAgg")
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -29,7 +29,7 @@ class BuildPlot(ttk.Frame):
 
         toolbarFrame = ttk.Frame(master=self)
         toolbarFrame.grid(row=1, column=0, sticky="ew")
-        NavigationToolbar2Tk(self.canvas, toolbarFrame)
+        self.navigation_toolbar = NavigationToolbar2Tk(self.canvas, toolbarFrame)
 
         self.current_data = None  # store last spectrum
 
