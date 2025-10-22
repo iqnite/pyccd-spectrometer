@@ -6,7 +6,7 @@ All rights reserved.
 Author: Esben Rossel <esbenrossel@gmail.com>
 
 THIS PROGRAM HAS BEEN MODIFIERD FOR SPECTROSCOPY by Adrian Matsch <adrian.b.matsch@gmail.com>
-More information can be found on <tcd1304.wordpress.com> and <www.astrolens.net>
+More information can be found on [the TCD1304 blog](https://tcd1304.wordpress.com) and [www.astrolens.net](https://www.astrolens.net).
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
