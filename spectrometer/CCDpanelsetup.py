@@ -393,7 +393,7 @@ class BuildPanel(ttk.Frame):
             colr.configure(fg="#ffc200")
             print_tint = "invalid"
         else:
-            status.set("Correct CCD pulse timing.")
+            status.set("CCD pulse timing correct.")
             colr.configure(fg="#ffffff")
             tint_sec = float(config.SHperiod) / config.MCLK
             if tint_sec < 1e-3:
