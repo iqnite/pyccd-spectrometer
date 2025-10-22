@@ -42,7 +42,7 @@ proc config_menus {w} {
       -relief solid \
       -borderwidth 1 \
       -activeborderwidth 0 \
-      -background "#292929" \
+      -background "#000000" \
       -activebackground $ttk::theme::sv_dark::colors(-selbg) \
       -activeforeground $ttk::theme::sv_dark::colors(-selfg) \
       -selectcolor $ttk::theme::sv_dark::colors(-selfg)
@@ -51,7 +51,7 @@ proc config_menus {w} {
       -relief solid \
       -borderwidth 1 \
       -activeborderwidth 0 \
-      -background "#e7e7e7" \
+      -background "#ffffff" \
       -activebackground $ttk::theme::sv_light::colors(-selbg) \
       -activeforeground $ttk::theme::sv_light::colors(-selfg) \
       -selectcolor $ttk::theme::sv_light::colors(-selfg)

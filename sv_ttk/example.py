@@ -198,14 +198,14 @@ def show_custom_menu():
     menu_bar.pack(side = "top", fill = "x")
     title.forget()
     update_colors()
-        
+
 def update_colors():
     if menubar.get() == "custom":
-        if sv_ttk.get_theme() == "dark": window.configure(bg = "#1f1f1f")
+        if sv_ttk.get_theme() == "dark": window.configure(bg = "#000000")
         else: window.configure(bg = "#ffffff")
     else:
-        if sv_ttk.get_theme() == "dark": window.configure(bg = "#1c1c1c")
-        else: window.configure(bg = "#fafafa")
+        if sv_ttk.get_theme() == "dark": window.configure(bg = "#000000")
+        else: window.configure(bg = "#ffffff")
 
 def toggle_theme(): sv_ttk.toggle_theme(); update_colors(); update_color_constants()
 
@@ -261,7 +261,7 @@ def update_color_constants():
 
     window.update()
     constants_list = ttk.Frame(color_constants)
-    
+
     try:
         add_color_constant_preview("Background (background/bg): ", sv_ttk.bg)
         add_color_constant_preview("Foreground (foreground/fg): ", sv_ttk.fg)

@@ -4,8 +4,8 @@ namespace eval ttk::theme::sv_light {
   package provide ttk::theme::sv_light 2.5
 
   array set colors {
-    -fg      "#1c1c1c"
-    -bg      "#fafafa"
+    -fg      "#000000"
+    -bg      "#ffffff"
     -disfg   "#a0a0a0"
     -selfg   "#ffffff"
     -selbg   "#ffc200"
@@ -443,7 +443,7 @@ namespace eval ttk::theme::sv_light {
         -rowheight [expr {[font metrics SunValleyBodyFont -linespace] + 3}] \
         -font SunValleyBodyFont
 
-    ttk::style map Treeview -background {selected "#e7e7e7"} -foreground {selected "#191919"}
+    ttk::style map Treeview -background {selected "#ffffff"} -foreground {selected "#000000"}
 
     ttk::style element create Treeview.field image $I(card) -border 5 -width 0 -height 0
     ttk::style element create Treeheading.cell image \

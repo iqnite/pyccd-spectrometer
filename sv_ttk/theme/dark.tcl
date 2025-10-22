@@ -4,8 +4,8 @@ namespace eval ttk::theme::sv_dark {
   package provide ttk::theme::sv_dark 2.5
 
   array set colors {
-    -fg      "#fafafa"
-    -bg      "#1c1c1c"
+    -fg      "#ffffff"
+    -bg      "#000000"
     -disfg   "#595959"
     -selfg   "#ffffff"
     -selbg   "#ffc200"
