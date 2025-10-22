@@ -144,7 +144,7 @@ class CalibrationWindow:
         self.status_var = tk.StringVar()
         self.status_var.set("Ready")
         self.status_label = tk.Label(
-            main_frame, textvariable=self.status_var, foreground="#6ccb5f"
+            main_frame, textvariable=self.status_var, foreground="#ffffff"
         )
         self.status_label.pack(pady=5)
 
@@ -171,9 +171,9 @@ class CalibrationWindow:
         """Update status message at the bottom"""
         self.status_var.set(message)
         if is_error:
-            self.status_label.configure(foreground="#ff99a4")
+            self.status_label.configure(foreground="#ffc200")
         else:
-            self.status_label.configure(foreground="#6ccb5f")
+            self.status_label.configure(foreground="#ffffff")
 
     def update_preview(self):
         """Update the preview graph"""

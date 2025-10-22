@@ -166,7 +166,9 @@ class BuildPanel(ttk.Frame):
         self.ldevice.grid(column=0, row=device_row)
         self.edevice = ttk.Entry(self, textvariable=self.device_address, justify="left")
         self.edevice.grid(column=1, row=device_row)
-        self.ldevicestatus = tk.Label(self, textvariable=self.device_status, fg="#6ccb5f")
+        self.ldevicestatus = tk.Label(
+            self, textvariable=self.device_status, fg="#ffffff"
+        )
         # setup trace to check if the device exists
         self.device_address.trace_add(
             "write",
@@ -367,7 +369,7 @@ class BuildPanel(ttk.Frame):
         except ValueError:
             # Invalid input: set error status
             self.tint_status.set("Invalid exposure input!")
-            self.lccdstatus.configure(fg="#ff99a4")
+            self.lccdstatus.configure(fg="#ffc200")
             self.tint_statuscolor.set("invalid")
 
     def ICGSHcallback(self, name, index, mode, status, tint, colr, SH, ICG):
@@ -388,11 +390,11 @@ class BuildPanel(ttk.Frame):
             or (config.ICGperiod < 14776)
         ):
             status.set("CCD pulse timing violation!")
-            colr.configure(fg="#ff99a4")
+            colr.configure(fg="#ffc200")
             print_tint = "invalid"
         else:
             status.set("Correct CCD pulse timing.")
-            colr.configure(fg="#6ccb5f")
+            colr.configure(fg="#ffffff")
             tint_sec = float(config.SHperiod) / config.MCLK
             if tint_sec < 1e-3:
                 print_tint = str(round(tint_sec * 1e6, 2)) + " us"
@@ -444,10 +446,10 @@ class BuildPanel(ttk.Frame):
                 ser = serial.Serial(config.port, config.baudrate, timeout=1)
                 status.set("Device exist")
                 ser.close()
-                colr.configure(fg="#6ccb5f")
+                colr.configure(fg="#ffffff")
             except serial.SerialException:
                 status.set("Device doesn't exist")
-                colr.configure(fg="#ff99a4")
+                colr.configure(fg="#ffc200")
 
     def updateplot(self, CCDplot):
         # This subtracts the ADC-pixel from ADC-dark
