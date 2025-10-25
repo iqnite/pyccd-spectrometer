@@ -383,7 +383,7 @@ def helpme(helpfor):
         helptext.insert(tk.END, "About\n", "h1")
         helptext.insert(
             tk.END,
-            "\nVersion: 0.1.0-beta\n",
+            "\nVersion: 1.0.0\n",
         )
         helptext.insert(tk.END, "\nCopyright (c) 2019 Esben Rossel")
         helptext.insert(tk.END, "\nAll rights reserved.\n")
