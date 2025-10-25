@@ -587,6 +587,7 @@ class BuildPanel(ttk.Frame):
             self,
             text="Collect",
             width=15,
+            style="Accent.TButton",
             command=lambda panel=self, SerQueue=SerQueue, progress_var=progress_var: CCDserial.rxtx(
                 panel, SerQueue, progress_var
             ),
@@ -599,7 +600,7 @@ class BuildPanel(ttk.Frame):
             command=lambda SerQueue=SerQueue: CCDserial.rxtxcancel(SerQueue),
             state=tk.DISABLED,
         )
-        self.bstop.grid(row=collect_row + 1, columnspan=2, sticky="EW", padx=5)
+        self.bstop.grid(row=collect_row + 1, columnspan=2, sticky="EW", padx=5, pady=5)
         # help button
         self.bhcol = ttk.Button(
             self, text="?", command=lambda helpfor=4: CCDhelp.helpme(helpfor)
@@ -678,12 +679,14 @@ class BuildPanel(ttk.Frame):
         self.bopen = ttk.Button(
             self.fileframe,
             text="Open",
+            style="Accent.TButton",
             width=11,
             command=lambda self=self, CCDplot=CCDplot: CCDfiles.openfile(self, CCDplot),
         )
         self.bsave = ttk.Button(
             self.fileframe,
             text="Save",
+            style="Accent.TButton",
             width=11,
             state=tk.DISABLED,
             command=lambda self=self: CCDfiles.savefile(self),
@@ -691,11 +694,15 @@ class BuildPanel(ttk.Frame):
 
         # Add calibration button next to save button
         self.bcalib = ttk.Button(
-            self.fileframe, text="Calibration", width=11, command=self.open_calibration
+            self.fileframe,
+            text="Calibration",
+            style="Accent.TButton",
+            width=11,
+            command=self.open_calibration,
         )
 
         self.bopen.pack(side=tk.LEFT)
-        self.bsave.pack(side=tk.LEFT)
+        self.bsave.pack(side=tk.LEFT, padx=(5, 0))
         self.bcalib.pack(
             side=tk.LEFT, padx=(5, 0)
         )  # Add some padding to separate from save button

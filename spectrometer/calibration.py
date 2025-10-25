@@ -152,14 +152,21 @@ class CalibrationWindow:
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=10)
 
-        ttk.Button(button_frame, text="Apply", command=self.apply_calibration).pack(
-            side=tk.LEFT, padx=(0, 10)
-        )
-        ttk.Button(button_frame, text="Save", command=self.save_calibration).pack(
-            side=tk.LEFT, padx=(0, 10)
-        )
         ttk.Button(
-            button_frame, text="Reset to Defaults", command=self.reset_defaults
+            button_frame,
+            text="Apply",
+            style="Accent.TButton",
+            command=self.apply_calibration,
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(
+            button_frame,
+            text="Save",
+            command=self.save_calibration,
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(
+            button_frame,
+            text="Reset to Defaults",
+            command=self.reset_defaults,
         ).pack(side=tk.LEFT, padx=(0, 10))
 
         # Close button (separate from Apply)
