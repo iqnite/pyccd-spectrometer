@@ -1,31 +1,27 @@
 # pySPEC
 
-Copyright (c) 2019 Esben Rossel
-All rights reserved.
+![Astrolens Logo](assets/astrolens.png)
 
-Author: Esben Rossel <esbenrossel@gmail.com>
+pySPEC is a platform-independent graphical user-interface written in Python 3 for spectroscopy with the TCD1304. Originally developed by [Esben Rossel](https://tcd1304.wordpress.com) for general-purpose data acquisition with the TCD1304 linear CCD sensor, it has been modified by [Adrian Matsch](https://www.astrolens.net) to specifically support spectroscopy applications.
 
-THIS PROGRAM HAS BEEN MODIFIERD FOR SPECTROSCOPY by Adrian Matsch <adrian.b.matsch@gmail.com>
-More information can be found on [the TCD1304 blog](https://tcd1304.wordpress.com) and [www.astrolens.net](https://www.astrolens.net).
+## Installation
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions
-are met:
+On Windows, download and run the installer from the [**Releases**](https://github.com/iqnite/pyccd-spectrometer/releases/latest) page.
 
-1. Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
-2. Redistributions in binary form must reproduce the above copyright
-   notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the distribution.
+On other platforms, ensure you have Python 3 and the required dependencies installed. You can install the dependencies using pip:
 
-THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL AUTHOR OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
-OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
-OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
-SUCH DAMAGE.
+```bash
+pip install -r requirements.txt
+```
+
+After that, you can run the application using:
+
+```bash
+python main.pyw
+```
+
+## Credits
+
+- Original development by [Esben Rossel](https://tcd1304.wordpress.com)
+- Modifications for spectroscopy and design by [Adrian Matsch](https://www.astrolens.net)
+- Development supported by [Philipp Donà](https://iqnite.github.io/)
