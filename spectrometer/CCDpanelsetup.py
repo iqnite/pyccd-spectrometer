@@ -61,7 +61,7 @@ class BuildPanel(ttk.Frame):
         self.grid_rowconfigure(mode_row + 1, minsize=20)
         self.devicefields(device_row)
         # insert vertical space
-        self.grid_rowconfigure(device_row + 4, minsize=30)
+        self.grid_rowconfigure(device_row + 1, minsize=30)
         self.CCDparamfields(shicg_row)
         # insert vertical space
         self.grid_rowconfigure(shicg_row + 4, minsize=30)
@@ -87,7 +87,7 @@ class BuildPanel(ttk.Frame):
             font=("Arial", 16, "bold"),
             foreground="#ffc200",
         )
-        self.lheader.grid(row=0, column=0, pady=10)
+        self.lheader.grid(row=0, column=2, pady=10, padx=5, sticky="e")
         self.bclose = ttk.Button(
             self,
             text="X",
@@ -98,32 +98,29 @@ class BuildPanel(ttk.Frame):
 
     def mode_fields(self, mode_row):
         """Add spectroscopy mode toggle"""
-        self.mode_frame = ttk.Frame(self)
-        self.mode_frame.grid(row=mode_row, columnspan=3, pady=10)
-
-        ttk.Label(
-            self.mode_frame, text="Operation Mode:", font=("Arial", 10, "bold")
-        ).pack(side=tk.LEFT, padx=5)
+        ttk.Label(self, text="Operation Mode:", font=("Arial", 10, "bold")).grid(
+            row=mode_row, column=0, padx=5, sticky="e"
+        )
 
         self.mode_var = tk.IntVar(value=0)  # 0 = Regular, 1 = Spectroscopy
 
         self.r_regular = ttk.Radiobutton(
-            self.mode_frame,
+            self,
             text="Regular Mode",
             variable=self.mode_var,
             value=0,
             command=self.mode_changed,
         )
-        self.r_regular.pack(side=tk.LEFT, padx=5)
+        self.r_regular.grid(row=mode_row, column=1, padx=5, sticky="w")
 
         self.r_spectroscopy = ttk.Radiobutton(
-            self.mode_frame,
+            self,
             text="Spectroscopy Mode",
             variable=self.mode_var,
             value=1,
             command=self.mode_changed,
         )
-        self.r_spectroscopy.pack(side=tk.LEFT, padx=5)
+        self.r_spectroscopy.grid(row=mode_row + 1, column=1, padx=5, sticky="w")
 
     def mode_changed(self):
         """Handle mode switching"""
@@ -182,9 +179,9 @@ class BuildPanel(ttk.Frame):
         self.device_statuscolor = tk.StringVar()
         # widgets
         self.ldevice = ttk.Label(self, text="COM-device:")
-        self.ldevice.grid(column=0, row=device_row)
+        self.ldevice.grid(column=0, row=device_row, sticky="e")
         self.edevice = ttk.Entry(self, textvariable=self.device_address, justify="left")
-        self.edevice.grid(column=1, row=device_row)
+        self.edevice.grid(column=1, row=device_row, sticky="w", padx=5)
         self.ldevicestatus = tk.Label(
             self, textvariable=self.device_status, fg="#ffffff"
         )
@@ -196,10 +193,10 @@ class BuildPanel(ttk.Frame):
             ),
         )
         self.device_address.set(config.port)
-        self.ldevicestatus.grid(columnspan=2, row=device_row + 1)
+        self.ldevicestatus.grid(column=1, row=device_row + 1, sticky="w", padx=5)
         # firmware selection
         self.lfirmware = ttk.Label(self, text="Firmware:")
-        self.lfirmware.grid(column=0, row=device_row + 2)
+        self.lfirmware.grid(column=0, row=device_row + 2, sticky="e", pady=5)
         self.firmware_type = tk.StringVar(value="STM32F40x")
         self.firmware_dropdown = ttk.Combobox(
             self,
@@ -207,7 +204,7 @@ class BuildPanel(ttk.Frame):
             values=["STM32F40x", "STM32F103"],
             state="readonly",
         )
-        self.firmware_dropdown.grid(column=1, row=device_row + 2)
+        self.firmware_dropdown.grid(column=1, row=device_row + 2, padx=5, sticky="w")
         self.firmware_type.trace_add("write", self.update_firmware)
         # help button
         self.bhdev = ttk.Button(
@@ -239,36 +236,38 @@ class BuildPanel(ttk.Frame):
 
         # Exposure time input directly gridded for alignment
         self.l_exposure = ttk.Label(self, text="Exposure Time:")
-        self.l_exposure.grid(column=0, row=shicg_row, pady=5)
+        self.l_exposure.grid(column=0, row=shicg_row, pady=5, sticky="e")
+        self.f_exposure = ttk.Frame(self)
+        self.f_exposure.grid(column=1, row=shicg_row, pady=5, padx=5, sticky="w")
         self.e_tint = ttk.Entry(
-            self, textvariable=self.tint_value, justify="left", width=10
+            self.f_exposure, textvariable=self.tint_value, justify="left", width=10
         )
-        self.e_tint.grid(column=1, row=shicg_row, pady=5)
+        self.e_tint.pack(side=tk.LEFT, anchor="w")
         self.unit_dropdown = ttk.Combobox(
-            self,
+            self.f_exposure,
             textvariable=self.tint_unit,
             values=["us", "ms", "s", "min"],
             state="readonly",
             width=5,
         )
-        self.unit_dropdown.grid(column=2, row=shicg_row, pady=5)
+        self.unit_dropdown.pack(side=tk.LEFT, padx=5, anchor="w")
 
         # Original SH/ICG fields (keep for display/override, but auto-update)
         self.lSH = ttk.Label(self, text="SH-period:")
-        self.lSH.grid(column=0, row=shicg_row + 1, pady=5)
+        self.lSH.grid(column=0, row=shicg_row + 1, pady=5, sticky="e")
         self.eSH = ttk.Entry(self, textvariable=self.SH, justify="left")
-        self.eSH.grid(column=1, row=shicg_row + 1, pady=5)
+        self.eSH.grid(column=1, row=shicg_row + 1, padx=5, pady=5, sticky="w")
 
         self.lICG = ttk.Label(self, text="ICG-period:")
-        self.lICG.grid(column=0, row=shicg_row + 2, pady=5)
+        self.lICG.grid(column=0, row=shicg_row + 2, pady=5, sticky="e")
         self.eICG = ttk.Entry(self, textvariable=self.ICG, justify="left")
-        self.eICG.grid(column=1, row=shicg_row + 2, pady=5)
+        self.eICG.grid(column=1, row=shicg_row + 2, padx=5, pady=5, sticky="w")
 
         # Status labels
         self.lccdstatus = tk.Label(self, textvariable=self.tint_status)
-        self.lccdstatus.grid(columnspan=2, row=shicg_row + 3, pady=5)
+        self.lccdstatus.grid(column=1, row=shicg_row + 3, pady=5, sticky="w")
         self.ltint = tk.Label(self, textvariable=self.tint_statuscolor)
-        self.ltint.grid(columnspan=2, row=shicg_row + 4, pady=5)
+        self.ltint.grid(column=1, row=shicg_row + 4, pady=5, sticky="w")
 
         # Help button
         self.bhccd = ttk.Button(
@@ -551,7 +550,7 @@ class BuildPanel(ttk.Frame):
         self.CONTvar = tk.IntVar()
         # widgets
         self.lcontinuous = ttk.Label(self, text="Collection mode:")
-        self.lcontinuous.grid(column=0, row=continuous_row)
+        self.lcontinuous.grid(column=0, row=continuous_row, sticky="e")
         self.roneshot = ttk.Radiobutton(
             self,
             text="One shot",
@@ -559,7 +558,7 @@ class BuildPanel(ttk.Frame):
             value=0,
             command=lambda CONTvar=self.CONTvar: self.modeset(CONTvar),
         )
-        self.roneshot.grid(column=1, row=continuous_row)
+        self.roneshot.grid(column=1, row=continuous_row, sticky="w", padx=5)
         self.rcontinuous = ttk.Radiobutton(
             self,
             text="Continuous",
@@ -567,7 +566,7 @@ class BuildPanel(ttk.Frame):
             value=1,
             command=lambda CONTvar=self.CONTvar: self.modeset(CONTvar),
         )
-        self.rcontinuous.grid(column=1, row=continuous_row + 1)
+        self.rcontinuous.grid(column=1, row=continuous_row + 1, sticky="w", padx=5)
         # help button
         self.bhcon = ttk.Button(
             self, text="?", command=lambda helpfor=2: CCDhelp.helpme(helpfor)
@@ -580,7 +579,7 @@ class BuildPanel(ttk.Frame):
         # average - variables, widgets and traces associated with the average slider
         # widgets
         self.lavg = ttk.Label(self, text="Averages:")
-        self.lavg.grid(column=0, row=avg_row)
+        self.lavg.grid(column=0, row=avg_row, sticky="e")
         self.AVGscale = ttk.Scale(
             self,
             from_=1,
@@ -589,9 +588,9 @@ class BuildPanel(ttk.Frame):
             length=200,
             command=self.AVGcallback,
         )
-        self.AVGscale.grid(column=1, row=avg_row)
+        self.AVGscale.grid(column=1, row=avg_row, padx=5, pady=5, sticky="w")
         self.AVGlabel = ttk.Label(self)
-        self.AVGlabel.grid(column=2, row=avg_row)
+        self.AVGlabel.grid(column=2, row=avg_row, padx=5, pady=5, sticky="w")
         self.AVGscale.set(config.AVGn[1])
         self.AVGlabel.config(text=str(config.AVGn[1]))
         # help button
@@ -602,8 +601,10 @@ class BuildPanel(ttk.Frame):
 
     def collectfields(self, collect_row, SerQueue, progress_var):
         # collect and stop buttons
+        self.buttonframe = ttk.Frame(self)
+        self.buttonframe.grid(row=collect_row, columnspan=2)
         self.bcollect = ttk.Button(
-            self,
+            self.buttonframe,
             text="Collect",
             width=15,
             style="Accent.TButton",
@@ -611,15 +612,15 @@ class BuildPanel(ttk.Frame):
                 panel, SerQueue, progress_var
             ),
         )
-        self.bcollect.grid(row=collect_row, columnspan=2, sticky="EW", padx=5)
+        self.bcollect.pack(side=tk.LEFT, padx=5, anchor="w")
         self.bstop = ttk.Button(
-            self,
+            self.buttonframe,
             text="Stop",
             width=15,
             command=lambda SerQueue=SerQueue: CCDserial.rxtxcancel(SerQueue),
             state=tk.DISABLED,
         )
-        self.bstop.grid(row=collect_row + 1, columnspan=2, sticky="EW", padx=5, pady=5)
+        self.bstop.pack(side=tk.RIGHT, padx=5, pady=5, anchor="e")
         # help button
         self.bhcol = ttk.Button(
             self, text="?", command=lambda helpfor=4: CCDhelp.helpme(helpfor)
@@ -640,11 +641,11 @@ class BuildPanel(ttk.Frame):
 
         # widgets
         self.lplot = ttk.Label(self, text="Plot mode:")
-        self.lplot.grid(column=0, row=plotmode_row)
+        self.lplot.grid(column=0, row=plotmode_row, sticky="e")
         self.cinvert = ttk.Checkbutton(
             self, text="Invert data", variable=self.invert, onvalue=1, offvalue=0
         )
-        self.cinvert.grid(column=1, row=plotmode_row)
+        self.cinvert.grid(column=1, row=plotmode_row, sticky="w", padx=5)
         self.cbalance = ttk.Checkbutton(
             self,
             text="Balance even/odd pixels",
@@ -653,7 +654,7 @@ class BuildPanel(ttk.Frame):
             offvalue=0,
             state=tk.DISABLED,
         )
-        self.cbalance.grid(column=1, row=plotmode_row + 1)
+        self.cbalance.grid(column=1, row=plotmode_row + 1, sticky="w", padx=5)
 
         # Show colors checkbox
         self.cshowcolors = ttk.Checkbutton(
@@ -664,7 +665,7 @@ class BuildPanel(ttk.Frame):
             offvalue=0,
             command=self.toggle_spectrum_colors,
         )
-        self.cshowcolors.grid(column=1, row=plotmode_row + 2)
+        self.cshowcolors.grid(column=1, row=plotmode_row + 2, sticky="w", padx=5)
 
         # setup traces to update the plot
         self.invert.trace_add(
@@ -720,10 +721,10 @@ class BuildPanel(ttk.Frame):
             command=self.open_calibration,
         )
 
-        self.bopen.pack(side=tk.LEFT, padx=(5, 0))
-        self.bsave.pack(side=tk.LEFT, padx=(5, 0))
+        self.bopen.pack(side=tk.LEFT, padx=(5, 0), pady=5)
+        self.bsave.pack(side=tk.LEFT, padx=(5, 0), pady=5)
         self.bcalib.pack(
-            side=tk.LEFT, padx=(5, 0)
+            side=tk.LEFT, padx=(5, 0), pady=5
         )  # Add some padding to separate from save button
 
         # help button
