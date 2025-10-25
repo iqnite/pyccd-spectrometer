@@ -194,7 +194,7 @@ class BuildPanel(ttk.Frame):
         self.bhdev = ttk.Button(
             self, text="?", command=lambda helpfor=0: CCDhelp.helpme(helpfor)
         )
-        self.bhdev.grid(row=device_row, column=3)
+        self.bhdev.grid(row=device_row, column=3, padx=5)
 
     def update_firmware(self, *args):
         if self.firmware_type.get() == "STM32F103":
