@@ -20,6 +20,8 @@ def main():
     root.bind("<F11>", enter_fullscreen)
     root.bind("<Escape>", quit_fullscreen)
 
+    enter_fullscreen()
+
     SerQueue = queue.Queue()
 
     # Build menu, plot frame, and control panel
