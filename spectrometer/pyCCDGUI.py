@@ -1,5 +1,7 @@
 import tkinter as tk
 import queue
+import os
+import sys
 from typing import cast
 from PIL import Image, ImageTk
 
@@ -8,7 +10,22 @@ from spectrometer import CCDpanelsetup, CCDplots
 
 root = tk.Tk()
 root.title("pySPEC")
-icon = Image.open("assets/icon.png")
+
+
+def resource_path(relative_path: str) -> str:
+    """Get absolute path to resource, works for dev and for PyInstaller bundles.
+
+    When frozen by PyInstaller, data files are unpacked to a temp folder
+    available via sys._MEIPASS. Otherwise, use the current working directory.
+    """
+    try:
+        base_path = sys._MEIPASS  # type: ignore[attr-defined]
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+
+icon = Image.open(resource_path("assets/icon.png"))
 icon = icon.resize((32, 32))
 icon_tk = ImageTk.PhotoImage(icon)
 root.iconphoto(True, cast(tk.PhotoImage, icon_tk))
