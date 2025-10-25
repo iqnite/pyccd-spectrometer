@@ -83,7 +83,7 @@ class BuildPanel(ttk.Frame):
         """Add header and close button"""
         self.lheader = ttk.Label(
             self,
-            text="pyCCDGUI",
+            text="pySPEC",
             font=("Arial", 16, "bold"),
             foreground="#ffc200",
         )

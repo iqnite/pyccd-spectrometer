@@ -7,7 +7,7 @@ from spectrometer import CCDpanelsetup, CCDplots
 
 def main():
     root = tk.Tk()
-    root.title("The Otter pyCCDGUI")
+    root.title("pySPEC")
     root.state("zoomed")
     sv_ttk.set_theme("dark")
 

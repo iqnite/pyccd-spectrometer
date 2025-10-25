@@ -123,7 +123,7 @@ def rxtxoncethread(panel, SerQueue, progress_var):
 
     except serial.SerialException:
         messagebox.showerror(
-            "By the great otter!",
+            "pySPEC",
             "There's a problem with the specified serial connection.",
         )
 
@@ -200,7 +200,7 @@ def rxtxcontthread(panel, progress_var):
 
     except serial.SerialException:
         messagebox.showerror(
-            "By the great otter!",
+            "pySPEC",
             "There's a problem with the specified serial connection.",
         )
 

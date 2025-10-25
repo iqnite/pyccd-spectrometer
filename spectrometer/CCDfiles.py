@@ -52,7 +52,7 @@ def openfile(self, CCDplot):
 
     except IOError:
         messagebox.showerror(
-            "By the great otter!", "There's a problem opening the file."
+            "pySPEC", "There's a problem opening the file."
         )
 
 
@@ -103,5 +103,5 @@ def savefile(self):
 
     except IOError:
         messagebox.showerror(
-            "By the great otter!", "There's a problem saving the file."
+            "pySPEC", "There's a problem saving the file."
         )
