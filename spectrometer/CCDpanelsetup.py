@@ -701,7 +701,7 @@ class BuildPanel(ttk.Frame):
             command=self.open_calibration,
         )
 
-        self.bopen.pack(side=tk.LEFT)
+        self.bopen.pack(side=tk.LEFT, padx=(5, 0))
         self.bsave.pack(side=tk.LEFT, padx=(5, 0))
         self.bcalib.pack(
             side=tk.LEFT, padx=(5, 0)
