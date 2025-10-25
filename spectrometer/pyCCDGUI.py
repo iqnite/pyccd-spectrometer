@@ -1,12 +1,17 @@
 import tkinter as tk
 import queue
+from typing import cast
+from PIL import Image, ImageTk
 
 import sv_ttk
 from spectrometer import CCDpanelsetup, CCDplots
 
-
 root = tk.Tk()
 root.title("pySPEC")
+icon = Image.open("assets/icon.png")
+icon = icon.resize((32, 32))
+icon_tk = ImageTk.PhotoImage(icon)
+root.iconphoto(True, cast(tk.PhotoImage, icon_tk))
 root.state("zoomed")
 sv_ttk.set_theme("dark")
 
