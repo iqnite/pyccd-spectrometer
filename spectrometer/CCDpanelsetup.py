@@ -54,6 +54,8 @@ class BuildPanel(ttk.Frame):
         self.CCDplot = CCDplot
 
         # Create all widgets and space between them
+        self.header_fields()
+        self.grid_rowconfigure(0, minsize=10)
         self.mode_fields(mode_row)
         # insert vertical space
         self.grid_rowconfigure(mode_row + 1, minsize=20)
@@ -76,6 +78,23 @@ class BuildPanel(ttk.Frame):
         # vertical space
         self.grid_rowconfigure(update_row + 2, minsize=20)
         self.aboutbutton(update_row + 3)
+
+    def header_fields(self):
+        """Add header and close button"""
+        self.lheader = ttk.Label(
+            self,
+            text="pyCCDGUI",
+            font=("Arial", 16, "bold"),
+            foreground="#ffc200",
+        )
+        self.lheader.grid(row=0, column=0, pady=10)
+        self.bclose = ttk.Button(
+            self,
+            text="X",
+            style="Accent.TButton",
+            command=lambda root=self.master: root.destroy(),
+        )
+        self.bclose.grid(row=0, column=3, pady=10)
 
     def mode_fields(self, mode_row):
         """Add spectroscopy mode toggle"""
