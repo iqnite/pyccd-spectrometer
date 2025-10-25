@@ -1,4 +1,4 @@
-# PyCCCDGUI Spectrometer
+# pySPEC
 
 Copyright (c) 2019 Esben Rossel
 All rights reserved.
