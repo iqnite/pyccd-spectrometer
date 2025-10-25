@@ -220,11 +220,11 @@ class BuildPanel(ttk.Frame):
 
         # Exposure time input directly gridded for alignment
         self.l_exposure = ttk.Label(self, text="Exposure Time:")
-        self.l_exposure.grid(column=0, row=shicg_row)
+        self.l_exposure.grid(column=0, row=shicg_row, pady=5)
         self.e_tint = ttk.Entry(
             self, textvariable=self.tint_value, justify="left", width=10
         )
-        self.e_tint.grid(column=1, row=shicg_row)
+        self.e_tint.grid(column=1, row=shicg_row, pady=5)
         self.unit_dropdown = ttk.Combobox(
             self,
             textvariable=self.tint_unit,
@@ -232,24 +232,24 @@ class BuildPanel(ttk.Frame):
             state="readonly",
             width=5,
         )
-        self.unit_dropdown.grid(column=2, row=shicg_row)
+        self.unit_dropdown.grid(column=2, row=shicg_row, pady=5)
 
         # Original SH/ICG fields (keep for display/override, but auto-update)
         self.lSH = ttk.Label(self, text="SH-period:")
-        self.lSH.grid(column=0, row=shicg_row + 1)
+        self.lSH.grid(column=0, row=shicg_row + 1, pady=5)
         self.eSH = ttk.Entry(self, textvariable=self.SH, justify="left")
-        self.eSH.grid(column=1, row=shicg_row + 1)
+        self.eSH.grid(column=1, row=shicg_row + 1, pady=5)
 
         self.lICG = ttk.Label(self, text="ICG-period:")
-        self.lICG.grid(column=0, row=shicg_row + 2)
+        self.lICG.grid(column=0, row=shicg_row + 2, pady=5)
         self.eICG = ttk.Entry(self, textvariable=self.ICG, justify="left")
-        self.eICG.grid(column=1, row=shicg_row + 2)
+        self.eICG.grid(column=1, row=shicg_row + 2, pady=5)
 
         # Status labels
         self.lccdstatus = tk.Label(self, textvariable=self.tint_status)
-        self.lccdstatus.grid(columnspan=2, row=shicg_row + 3)
+        self.lccdstatus.grid(columnspan=2, row=shicg_row + 3, pady=5)
         self.ltint = tk.Label(self, textvariable=self.tint_statuscolor)
-        self.ltint.grid(columnspan=2, row=shicg_row + 4)
+        self.ltint.grid(columnspan=2, row=shicg_row + 4, pady=5)
 
         # Help button
         self.bhccd = ttk.Button(
