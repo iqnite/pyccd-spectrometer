@@ -23,7 +23,7 @@ jobs:
                   if [ -f requirements.txt ]; then pip install -r requirements.txt || true; fi
                   pip install pyinstaller
 
-            - name: Build .app with PyInstaller
+            - name: Build with PyInstaller
               working-directory: ${{ github.workspace }}
               run: |
                   pyinstaller pyCCDGUI.spec
