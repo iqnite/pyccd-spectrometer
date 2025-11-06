@@ -7,12 +7,18 @@ DIST_DIR=${1:-dist}
 OUT_DMG=${2:-pySPEC.dmg}
 APP_BASENAME="pySPEC"
 
-echo "Looking for file in ${DIST_DIR}..."
+echo "Looking for .app in ${DIST_DIR}..."
 
-APP_PATH="pySPEC"
+APP_PATH=""
+for item in "${DIST_DIR}"/*.app; do
+  if [ -d "$item" ]; then
+    APP_PATH="$item"
+    break
+  fi
+done
 
 if [ -z "$APP_PATH" ]; then
-  echo "No ${APP_PATH} found in ${DIST_DIR}. Listing contents:" >&2
+  echo "No .app bundle found in ${DIST_DIR}. Listing contents:" >&2
   ls -la "${DIST_DIR}" || true
   exit 1
 fi
