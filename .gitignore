@@ -4,5 +4,4 @@
 .coverage
 calibration_params.json
 build/
-dist/
 output/
