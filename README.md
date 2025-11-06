@@ -17,7 +17,7 @@ pip install -r requirements.txt
 After that, you can run the application using:
 
 ```bash
-python main.pyw
+python3 main.pyw
 ```
 
 ## Credits
