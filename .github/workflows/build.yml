@@ -33,37 +33,3 @@ jobs:
               with:
                   name: pySPEC-exe
                   path: dist/pySPEC.exe
-
-    build-macos:
-        runs-on: macos-latest
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: Set up Python
-              uses: actions/setup-python@v4
-              with:
-                  python-version: "3.13"
-
-            - name: Install dependencies
-              run: |
-                  python -m pip install --upgrade pip
-                  if [ -f requirements.txt ]; then pip install -r requirements.txt || true; fi
-                  pip install pyinstaller
-
-            - name: Build with PyInstaller
-              working-directory: ${{ github.workspace }}
-              run: |
-                  pyinstaller pyCCDGUI.spec
-
-            - name: Create DMG (pySPEC.dmg)
-              working-directory: ${{ github.workspace }}
-              run: |
-                  chmod +x ./scripts/build_macos_dmg.sh || true
-                  ./scripts/build_macos_dmg.sh dist pySPEC.dmg
-
-            - name: Upload DMG artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: pySPEC-dmg
-                  path: dist/pySPEC.dmg
