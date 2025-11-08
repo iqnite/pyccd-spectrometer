@@ -27,6 +27,8 @@ txfull = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.uint8)
 datainvert = 1
 offset = 0
 balanced = 0
+# Mirror data left/right
+datamirror = 0
 
 # Spectroscopy mode configuration
 spectroscopy_mode = False  # False = regular mode, True = spectroscopy mode

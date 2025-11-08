@@ -440,6 +440,11 @@ class BuildPanel(ttk.Frame):
             self.cbalance.config(state=tk.NORMAL)
         self.updateplot(CCDplot)
 
+    def MIRcallback(self, name, index, mode, mirror, CCDplot):
+        """Callback when mirror checkbox changes"""
+        config.datamirror = mirror.get()
+        self.updateplot(CCDplot)
+
     def BALcallback(self, name, index, mode, balanced, CCDplot):
         config.balanced = balanced.get()
         self.updateplot(CCDplot)
@@ -508,28 +513,29 @@ class BuildPanel(ttk.Frame):
             x_values = np.arange(3694)
             x_label = "Pixelnumber"
 
-        # Set axis limits based on mode - FIXED: Normal direction for spectroscopy
-        if (
-            config.spectroscopy_mode
-            and hasattr(default_calibration, "apply")
-            and callable(default_calibration.apply)
-        ):
-            # Normal direction for spectroscopy: lower wavelengths on left, higher on right
-            CCDplot.a.set_xlim(x_values[0], x_values[-1])
-        else:
-            # Normal axis for regular mode
-            CCDplot.a.set_xlim(x_values[0], x_values[-1])
+        # Apply mirroring if requested: reverse x axis and data so left/right swap
+        if hasattr(config, "datamirror") and config.datamirror == 1:
+            x_values = x_values[::-1]
+
+        # Set axis limits based on (possibly mirrored) x_values
+        CCDplot.a.set_xlim(x_values[0], x_values[-1])
 
         # plot intensities
         if config.datainvert == 1:
-            CCDplot.a.plot(x_values, config.pltData16)
+            data = config.pltData16
+            if hasattr(config, "datamirror") and config.datamirror == 1:
+                data = data[::-1]
+            CCDplot.a.plot(x_values, data)
             CCDplot.a.set_ylabel("Intensity")
             CCDplot.a.set_xlabel(x_label)
             # Set Y-axis range for intensity plot
             CCDplot.a.set_ylim(-10, 2250)
         else:
             # plot raw data
-            CCDplot.a.plot(x_values, config.rxData16)
+            data = config.rxData16
+            if hasattr(config, "datamirror") and config.datamirror == 1:
+                data = data[::-1]
+            CCDplot.a.plot(x_values, data)
             CCDplot.a.set_ylabel("ADCcount")
             CCDplot.a.set_xlabel(x_label)
             # Set Y-axis range for raw data plot
@@ -638,6 +644,7 @@ class BuildPanel(ttk.Frame):
         self.invert = tk.IntVar()
         self.balanced = tk.IntVar()
         self.show_colors = tk.IntVar()
+        self.mirror = tk.IntVar()
 
         # widgets
         self.lplot = ttk.Label(self, text="Plot mode:")
@@ -667,6 +674,16 @@ class BuildPanel(ttk.Frame):
         )
         self.cshowcolors.grid(column=1, row=plotmode_row + 2, sticky="w", padx=5)
 
+        # Mirror data checkbox (left/right)
+        self.cmirror = ttk.Checkbutton(
+            self,
+            text="Mirror data",
+            variable=self.mirror,
+            onvalue=1,
+            offvalue=0,
+        )
+        self.cmirror.grid(column=1, row=plotmode_row + 3, sticky="w", padx=5)
+
         # setup traces to update the plot
         self.invert.trace_add(
             "write",
@@ -680,11 +697,18 @@ class BuildPanel(ttk.Frame):
                 name, index, mode, balanced, CCDplot
             ),
         )
+        self.mirror.trace_add(
+            "write",
+            lambda name, index, mode, mirror=self.mirror, CCDplot=CCDplot: self.MIRcallback(
+                name, index, mode, mirror, CCDplot
+            ),
+        )
 
         # set initial state
         self.invert.set(config.datainvert)
         self.balanced.set(config.balanced)
         self.show_colors.set(0)
+        self.mirror.set(getattr(config, "datamirror", 0))
 
         # help button
         self.bhplo = ttk.Button(
