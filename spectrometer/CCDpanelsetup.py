@@ -32,6 +32,7 @@ import math
 
 from spectrometer import config, CCDhelp, CCDserial, CCDfiles
 from spectrometer.calibration import default_calibration
+from utils import plotgraph
 
 
 class BuildPanel(ttk.Frame):
@@ -496,6 +497,12 @@ class BuildPanel(ttk.Frame):
                     config.pltData16[2 * i] = config.pltData16[2 * i] - config.offset
         CCDplot.a.clear()
 
+        # Capture current x-limits early so we can restore user zoom after redraw
+        try:
+            prev_xlim = tuple(self.CCDplot.a.get_xlim()) if hasattr(self.CCDplot, "a") and self.CCDplot.a is not None else None
+        except Exception:
+            prev_xlim = None
+
         # Choose x-axis based on mode
         if config.spectroscopy_mode:
             # Use wavelength calibration for spectroscopy mode
@@ -513,19 +520,18 @@ class BuildPanel(ttk.Frame):
             x_values = np.arange(3694)
             x_label = "Pixelnumber"
 
-        # Apply mirroring if requested: reverse x axis and data so left/right swap
-        if hasattr(config, "datamirror") and config.datamirror == 1:
-            x_values = x_values[::-1]
-
-        # Set axis limits based on (possibly mirrored) x_values
-        CCDplot.a.set_xlim(x_values[0], x_values[-1])
+    # Axis limits will be restored later (preserve user zoom) — do not set them here
 
         # plot intensities
         if config.datainvert == 1:
             data = config.pltData16
-            if hasattr(config, "datamirror") and config.datamirror == 1:
-                data = data[::-1]
-            CCDplot.a.plot(x_values, data)
+            # main plot uses opacity from slider (default 1.0)
+            try:
+                alpha = float(self.opacity_scale.get()) / 100.0
+            except Exception:
+                alpha = 1.0
+            # Plot raw/intensity data directly (mirroring removed)
+            CCDplot.a.plot(x_values, data, alpha=alpha)
             CCDplot.a.set_ylabel("Intensity")
             CCDplot.a.set_xlabel(x_label)
             # Set Y-axis range for intensity plot
@@ -533,9 +539,12 @@ class BuildPanel(ttk.Frame):
         else:
             # plot raw data
             data = config.rxData16
-            if hasattr(config, "datamirror") and config.datamirror == 1:
-                data = data[::-1]
-            CCDplot.a.plot(x_values, data)
+            try:
+                alpha = float(self.opacity_scale.get()) / 100.0
+            except Exception:
+                alpha = 1.0
+            # Plot raw data directly (mirroring removed)
+            CCDplot.a.plot(x_values, data, alpha=alpha)
             CCDplot.a.set_ylabel("ADCcount")
             CCDplot.a.set_xlabel(x_label)
             # Set Y-axis range for raw data plot
@@ -543,6 +552,43 @@ class BuildPanel(ttk.Frame):
 
         # Update spectrum background
         self.CCDplot.set_show_colors(self.show_colors.get())
+
+        # If interpolation toggle is active, compute and plot interpolated curve
+        try:
+            if getattr(self, "ph_checkbox_var", None) and self.ph_checkbox_var.get() == 1:
+                # Use the same data that was plotted (data variable)
+                n = data.size
+                pixels = np.arange(n)
+                intensities = data.astype(float)
+
+                # smoothing parameter from slider (map 0..100 -> 0.0..0.1)
+                try:
+                    sval = float(self.ph_scale.get())
+                except Exception:
+                    sval = 5.0
+                # Use finer mapping so small slider changes at the low end have
+                # a noticeable effect: divisor 1000 gives range 0.0..0.1
+                smooth = max(0.0, float(sval) / 1000.0)
+
+                interp_fn, interp_kind = plotgraph.make_interpolator(pixels, intensities, method="spline", smooth=smooth)
+                xs_pix = np.linspace(pixels.min(), pixels.max(), 2000)
+                try:
+                    ys_interp = interp_fn(xs_pix)
+                    ys_interp = np.asarray(ys_interp, dtype=float)
+                except Exception:
+                    ys_interp = np.interp(xs_pix, pixels, intensities)
+
+                # Map pixel x-coordinates to plot x-coordinates (pixels or calibrated wavelengths)
+                if config.spectroscopy_mode and hasattr(default_calibration, "apply") and callable(default_calibration.apply):
+                    xs_plot = default_calibration.apply(xs_pix.astype(int))
+                else:
+                    xs_plot = xs_pix
+
+                # Plot interpolated curve as a distinct coloured line
+                CCDplot.a.plot(xs_plot, ys_interp, color="red", lw=0.9, alpha=0.9, label="interpolated")
+        except Exception:
+            # don't let interpolation failures break the plotting
+            pass
 
         CCDplot.canvas.draw()
 
@@ -644,7 +690,11 @@ class BuildPanel(ttk.Frame):
         self.invert = tk.IntVar()
         self.balanced = tk.IntVar()
         self.show_colors = tk.IntVar()
-        self.mirror = tk.IntVar()
+        # plot mode - variables, widgets and traces associated with the plot mode
+        # variables
+        self.invert = tk.IntVar()
+        self.balanced = tk.IntVar()
+        self.show_colors = tk.IntVar()
 
         # widgets
         self.lplot = ttk.Label(self, text="Plot mode:")
@@ -674,16 +724,6 @@ class BuildPanel(ttk.Frame):
         )
         self.cshowcolors.grid(column=1, row=plotmode_row + 2, sticky="w", padx=5)
 
-        # Mirror data checkbox (left/right)
-        self.cmirror = ttk.Checkbutton(
-            self,
-            text="Mirror data",
-            variable=self.mirror,
-            onvalue=1,
-            offvalue=0,
-        )
-        self.cmirror.grid(column=1, row=plotmode_row + 3, sticky="w", padx=5)
-
         # setup traces to update the plot
         self.invert.trace_add(
             "write",
@@ -697,18 +737,11 @@ class BuildPanel(ttk.Frame):
                 name, index, mode, balanced, CCDplot
             ),
         )
-        self.mirror.trace_add(
-            "write",
-            lambda name, index, mode, mirror=self.mirror, CCDplot=CCDplot: self.MIRcallback(
-                name, index, mode, mirror, CCDplot
-            ),
-        )
 
         # set initial state
         self.invert.set(config.datainvert)
         self.balanced.set(config.balanced)
         self.show_colors.set(0)
-        self.mirror.set(getattr(config, "datamirror", 0))
 
         # help button
         self.bhplo = ttk.Button(
@@ -757,6 +790,62 @@ class BuildPanel(ttk.Frame):
         )
         self.bhsav.grid(row=save_row, column=3)
 
+        # Add a little vertical spacing before the placeholder controls
+        self.grid_rowconfigure(save_row + 1, minsize=12)
+
+        # Placeholder controls: a checkbox and a slider (styled like Averages)
+        # Placed below the save/open/calibration buttons
+        self.ph_checkbox_var = tk.IntVar(value=0)
+        self.ph_check = ttk.Checkbutton(
+            self,
+            text="Toggle interpolation",
+            variable=self.ph_checkbox_var,
+            onvalue=1,
+            offvalue=0,
+        )
+        self.ph_check.grid(column=1, row=save_row + 2, sticky="w", padx=5)
+        # Trace the checkbox so we can enable/disable the slider dynamically
+        # Also trigger a plot update so the interpolation overlay appears immediately
+        self.ph_checkbox_var.trace_add(
+            "write",
+            lambda *args, CCDplot=CCDplot: (self._ph_check_changed(), self.updateplot(CCDplot)),
+        )
+
+        # Placeholder slider similar to Averages
+        self.lphslider = ttk.Label(self, text="Strength")
+        self.lphslider.grid(column=0, row=save_row + 3, sticky="e")
+        self.ph_scale = ttk.Scale(
+            self,
+            from_=0,
+            to=100,
+            orient=tk.HORIZONTAL,
+            length=200,
+            command=self._phslider_callback,
+        )
+        self.ph_scale.grid(column=1, row=save_row + 3, padx=5, pady=5, sticky="w")
+        # Use a tk.Label so we can change the foreground color when disabled
+        self.ph_label = tk.Label(self, text="0", fg="#ffffff")
+        self.ph_label.grid(column=2, row=save_row + 3, padx=5, pady=5, sticky="w")
+
+        # Set initial enabled/disabled state based on the checkbox
+        self._ph_check_changed()
+
+        # Opacity slider for the main plot line (0..100 -> 0.0..1.0)
+        self.lopacity = ttk.Label(self, text="Raw opacity")
+        self.lopacity.grid(column=0, row=save_row + 4, sticky="e")
+        self.opacity_scale = ttk.Scale(
+            self,
+            from_=0,
+            to=100,
+            orient=tk.HORIZONTAL,
+            length=200,
+            command=self._opacity_callback,
+        )
+        self.opacity_scale.grid(column=1, row=save_row + 4, padx=5, pady=5, sticky="w")
+        self.opacity_label = ttk.Label(self, text="1.00")
+        self.opacity_label.grid(column=2, row=save_row + 4, padx=5, pady=5, sticky="w")
+        self.opacity_scale.set(100)
+
     def open_calibration(self):
         """Open calibration window with proper callback reference"""
         default_calibration.open_calibration_window(
@@ -774,6 +863,84 @@ class BuildPanel(ttk.Frame):
 
         # commented out, it's needed to inject an event into the ttk.mainloop for updating the plot from the 'checkfordata' thread
         # self.bupdate.grid(row=update_row, columnspan=3, sticky="EW", padx=5)
+
+    def _phslider_callback(self, val):
+        """Internal callback for the placeholder slider to update the label."""
+        try:
+            v = float(val)
+        except Exception:
+            v = 0.0
+        # Map slider (0..100) to smoothing factor. Make mapping finer at low
+        # slider values by using a divisor of 1000 instead of 500.
+        smooth = v / 1000.0
+        # Show smoothing value with a bit more precision so weak smoothing is visible
+        try:
+            self.ph_label.config(text=f"{smooth:.4f}")
+        except Exception:
+            # fallback to integer display
+            self.ph_label.config(text=str(int(round(v))))
+        # If interpolation is enabled, update the plot so changes take effect immediately
+        try:
+            if getattr(self, "ph_checkbox_var", None) and self.ph_checkbox_var.get() == 1:
+                try:
+                    self.updateplot(self.CCDplot)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def _ph_check_changed(self):
+        """Enable or disable the placeholder slider based on the checkbox state
+
+        Also dim the label color when disabled to give a visual cue.
+        """
+        enabled = bool(self.ph_checkbox_var.get())
+        if enabled:
+            # enable the scale
+            try:
+                self.ph_scale.state(["!disabled"])
+            except Exception:
+                try:
+                    self.ph_scale.configure(state=tk.NORMAL)
+                except Exception:
+                    pass
+            # bright label
+            try:
+                self.ph_label.config(fg="#ffffff")
+            except Exception:
+                pass
+        else:
+            # disable the scale
+            try:
+                self.ph_scale.state(["disabled"])
+            except Exception:
+                try:
+                    self.ph_scale.configure(state=tk.DISABLED)
+                except Exception:
+                    pass
+            # dim label
+            try:
+                self.ph_label.config(fg="#888888")
+            except Exception:
+                pass
+
+    def _opacity_callback(self, val):
+        """Callback for the opacity slider: update label and redraw plot."""
+        try:
+            v = float(val)
+        except Exception:
+            v = 100.0
+        alpha = max(0.0, min(1.0, v / 100.0))
+        try:
+            self.opacity_label.config(text=f"{alpha:.2f}")
+        except Exception:
+            pass
+
+        # Redraw the plot to apply new opacity
+        try:
+            self.updateplot(self.CCDplot)
+        except Exception:
+            pass
 
     def callback(self):
         self.bopen.config(state=tk.DISABLED)

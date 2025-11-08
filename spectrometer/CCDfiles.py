@@ -25,29 +25,55 @@
 # SUCH DAMAGE.
 
 
+import tkinter as tk
 from tkinter import filedialog
 from tkinter import messagebox
+from PIL import Image, ImageTk
+from io import BytesIO
 import csv
+import numpy as np
 
 from spectrometer import config, CCDpanelsetup
+from utils import plotgraph
 
 
 def openfile(self, CCDplot):
     filename = filedialog.askopenfilename(
         defaultextension=".dat", title="Open file", parent=self
     )
-    line_count = 0
-    try:
-        with open(filename) as csvfile:
-            readCSV = csv.reader(csvfile, delimiter=" ")
+    if not filename:
+        return
 
-            for row in readCSV:
-                if line_count == 3:
-                    config.SHsent = int(row[1])
-                    config.ICGsent = int(row[6])
-                if line_count > 3:
-                    config.rxData16[line_count - 4] = int(row[1])
-                line_count += 1
+    try:
+        # Use the robust readers from utils.plotgraph to parse the file
+        lines = plotgraph.read_file_lines(filename)
+        pixels, adcs = plotgraph.parse_lines_to_arrays(lines)
+
+        # Update config.rxData16 from the parsed ADCs (map by pixel index if possible)
+        try:
+            for p, a in zip(pixels, adcs):
+                idx = int(p) - 1
+                if 0 <= idx < config.rxData16.size:
+                    config.rxData16[idx] = int(round(a))
+        except Exception:
+            n = min(len(adcs), config.rxData16.size)
+            config.rxData16[:n] = np.round(adcs[:n]).astype(config.rxData16.dtype)
+
+        # Try to extract SH/ICG info from first few header lines
+        try:
+            for ln in lines[:6]:
+                if "SH-period" in ln or "SH-period:" in ln:
+                    nums = [int(''.join(ch for ch in tok if ch.isdigit())) for tok in ln.split() if any(c.isdigit() for c in tok)]
+                    if len(nums) >= 2:
+                        config.SHsent = nums[0]
+                        config.ICGsent = nums[1]
+                        break
+        except Exception:
+            pass
+
+        # No standalone preview window: we only update the main plot with the loaded data
+
+        # Update the main plot with the loaded data
         CCDpanelsetup.BuildPanel.updateplot(self, CCDplot)
 
     except IOError:
