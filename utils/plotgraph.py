@@ -122,11 +122,16 @@ def estimate_dark(pixels: np.ndarray, adcs: np.ndarray, method: str = "median"):
     else:
         return float(np.mean(dark_vals)), dark_vals
 
-def make_interpolator(pixels: np.ndarray, intensities: np.ndarray, method: str = "spline"):
+def make_interpolator(pixels: np.ndarray, intensities: np.ndarray, method: str = "spline", smooth: float = 0.2):
+    """Create an interpolator. `smooth` increases smoothing when using spline (larger -> smoother).
+
+    Returns (callable, description)
+    """
     try:
         if method == "spline":
             from scipy.interpolate import UnivariateSpline
-            s = max(0.0, len(pixels) * np.var(intensities) * 0.02)
+            # stronger smoothing by default: scale factor (user-controlled)
+            s = max(0.0, len(pixels) * np.var(intensities) * float(smooth))
             spline = UnivariateSpline(pixels, intensities, s=s)
             return spline, f"UnivariateSpline(s={s:.3g})"
         else:
@@ -162,6 +167,10 @@ def main():
     parser.add_argument("--interp", choices=["spline","cubic","linear"], default="spline", help="interpolation method for overlay and sampled CSV")
     parser.add_argument("--dark-method", choices=["median","mean"], default="median", help="how to estimate ADC_dark")
     parser.add_argument("--samples", type=int, default=10000, help="number of points to sample the interpolated function")
+    parser.add_argument("--smooth", type=float, default=0.2, help="smoothing multiplier for spline (larger -> smoother). Default 0.2")
+    # Default smooths: keep only the weaker values (remove 0.1 and 0.2 as requested)
+    parser.add_argument("--smooths", type=str, default="0.01,0.02,0.05", help="comma-separated list of smoothing multipliers to plot multiple interpolations (e.g. '0.01,0.02,0.05')")
+    parser.add_argument("--linewidth", type=float, default=0.6, help="default line width for PNG output (thin lines)")
     args = parser.parse_args()
 
     infile_path: Path | None = None
@@ -213,44 +222,64 @@ def main():
     print(f"Wrote per-pixel CSV -> {out_csv}")
 
     # Make interpolator and sample
-    interp_fn, interp_kind = make_interpolator(pixels, intensities, method=args.interp)
+    # Prepare sampling grid
     xs = np.linspace(pixels.min(), pixels.max(), max(1000, args.samples))
+
+    # Parse multi-smoothing values for plotting several interpolation strengths
     try:
-        ys = interp_fn(xs)
-        ys = np.asarray(ys, dtype=float)
-    except Exception as e:
-        print("Interpolator evaluation failed, falling back to numpy.interp:", e)
-        ys = np.interp(xs, pixels, intensities)
-        interp_kind = "numpy.interp(fallback)"
+        smooth_values = [float(s.strip()) for s in str(args.smooths).split(",") if s.strip()]
+    except Exception:
+        smooth_values = [args.smooth]
 
-    sampled_csv = out_dir / f"{out_prefix}_interpolated_sample.csv"
-    np.savetxt(sampled_csv, np.vstack([xs, ys]).T, fmt="%.6f,%.6f",
-               header="pixel,Ipixel_interp", comments="")
-    print(f"Saved interpolated samples ({interp_kind}) -> {sampled_csv}")
+    interp_results = []
+    for s_val in smooth_values:
+        interp_fn_i, interp_kind_i = make_interpolator(pixels, intensities, method=args.interp, smooth=s_val)
+        try:
+            ys_i = interp_fn_i(xs)
+            ys_i = np.asarray(ys_i, dtype=float)
+        except Exception:
+            ys_i = np.interp(xs, pixels, intensities)
+            interp_kind_i = "numpy.interp(fallback)"
+        interp_results.append((s_val, interp_kind_i, ys_i))
 
-    # Try to pickle interpolator
-    pklfile = out_dir / f"{out_prefix}_interpolator.pkl"
-    try:
-        with pklfile.open("wb") as pf:
-            pickle.dump(interp_fn, pf)
-        print(f"Pickled interpolator -> {pklfile}")
-    except Exception as e:
-        print("Could not pickle interpolator (non-fatal):", e)
-
-    # Plot: raw ADC and Ipixel with overlay
-    fig, (ax0, ax1) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
-    ax0.plot(pixels, adcs, color="tab:blue", lw=0.6, label="ADC (raw)")
-    ax0.axhline(adc_dark, color="tab:orange", ls="--", lw=1.0, label=f"ADC_dark={adc_dark:.2f}")
+    # Plot: raw ADC (top), flipped Ipixel (middle), and interpolated/smoothed (bottom)
+    fig, (ax0, ax1, ax2) = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+    lw = float(args.linewidth)
+    ax0.plot(pixels, adcs, color="tab:blue", lw=lw, label="ADC (raw)")
+    ax0.axhline(adc_dark, color="tab:orange", ls="--", lw=lw, label=f"ADC_dark={adc_dark:.2f}")
     ax0.set_ylabel("ADC counts")
     ax0.legend(fontsize="small")
     ax0.grid(True, alpha=0.3)
 
-    ax1.plot(pixels, intensities, color="tab:green", lw=0.6, label="Ipixel (per-pixel)")
-    ax1.plot(xs, ys, color="red", lw=1.0, alpha=0.9, label=f"Interpolated ({interp_kind})")
-    ax1.set_xlabel("pixel number")
-    ax1.set_ylabel("Ipixel = ADC_dark - ADC")
+    # Middle: flipped (upside-down) so peaks become troughs
+    # Use max-based inversion to keep signal in the same positive range
+    y_flipped = np.max(intensities) - intensities
+    # Make the flipped trace more visually distinct: green, slightly thicker
+    ax1.plot(pixels, y_flipped, color="green", lw=max(0.8, lw * 1.2), label="Ipixel (flipped)")
+    ax1.set_ylabel("Flipped Ipixel")
+    # Visually invert the y-axis so the panel appears upside-down (peaks downwards)
+    ax1.invert_yaxis()
     ax1.legend(fontsize="small")
     ax1.grid(True, alpha=0.3)
+
+    # Bottom: interpolated / smoothed (separate plot). Plot multiple curves with different smoothing strengths.
+    # Plot a very faint original Ipixel trace in the interpolation panel for reference
+    orig_on_xs = np.interp(xs, pixels, intensities)
+    # Slightly more visible raw trace for reference
+    ax2.plot(xs, orig_on_xs, color="gray", lw=0.8, alpha=0.28, label="raw Ipixel (faint)")
+
+    # Use only the requested distinct colors (no green/yellow): blue, red, purple
+    palette = ["blue", "red", "purple"]
+    colors = [palette[i % len(palette)] for i in range(len(interp_results))]
+    import math
+    for (s_val, kind, ys_i), col in zip(interp_results, colors):
+        # Force s=0.05 to green for emphasis per request (use isclose for safety)
+        plot_col = "green" if math.isclose(float(s_val), 0.05, rel_tol=1e-6, abs_tol=1e-9) else col
+        ax2.plot(xs, ys_i, color=plot_col, lw=max(0.8, lw), alpha=0.95, label=f"s={s_val} ({kind})")
+    ax2.set_xlabel("pixel number")
+    ax2.set_ylabel("Ipixel (interpolated)")
+    ax2.legend(fontsize="small")
+    ax2.grid(True, alpha=0.3)
 
     # Shade dummy pixel regions if within range
     try:
@@ -258,9 +287,11 @@ def main():
         if pmin <= 32:
             ax0.fill_betweenx(ax0.get_ylim(), 1, 32, color="gray", alpha=0.08)
             ax1.fill_betweenx(ax1.get_ylim(), 1, 32, color="gray", alpha=0.08)
+            ax2.fill_betweenx(ax2.get_ylim(), 1, 32, color="gray", alpha=0.08)
         if pmax >= 3679:
             ax0.fill_betweenx(ax0.get_ylim(), 3679, 3694, color="gray", alpha=0.08)
             ax1.fill_betweenx(ax1.get_ylim(), 3679, 3694, color="gray", alpha=0.08)
+            ax2.fill_betweenx(ax2.get_ylim(), 3679, 3694, color="gray", alpha=0.08)
     except Exception:
         pass
 
