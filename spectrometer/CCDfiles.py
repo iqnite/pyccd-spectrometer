@@ -76,6 +76,12 @@ def openfile(self, CCDplot):
         # Update the main plot with the loaded data
         CCDpanelsetup.BuildPanel.updateplot(self, CCDplot)
 
+        # Enable save button now that data has been loaded
+        try:
+            self.bsave.config(state=tk.NORMAL)
+        except Exception:
+            pass
+
     except IOError:
         messagebox.showerror(
             "pySPEC", "There's a problem opening the file."

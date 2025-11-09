@@ -234,6 +234,10 @@ def panelsleep(panel):
     panel.edevice.config(state=ttk.DISABLED)
     panel.cinvert.config(state=ttk.DISABLED)
     panel.cbalance.config(state=ttk.DISABLED)
+    try:
+        panel.cmirror.config(state=ttk.DISABLED)
+    except Exception:
+        pass
 
 
 def panelwakeup(panel):
@@ -248,5 +252,9 @@ def panelwakeup(panel):
     panel.eSH.config(state=ttk.NORMAL)
     panel.edevice.config(state=ttk.NORMAL)
     panel.cinvert.config(state=ttk.NORMAL)
+    try:
+        panel.cmirror.config(state=ttk.NORMAL)
+    except Exception:
+        pass
     if config.datainvert == 1:
         panel.cbalance.config(state=ttk.NORMAL)

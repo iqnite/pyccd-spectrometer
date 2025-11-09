@@ -530,7 +530,14 @@ class BuildPanel(ttk.Frame):
                 alpha = float(self.opacity_scale.get()) / 100.0
             except Exception:
                 alpha = 1.0
-            # Plot raw/intensity data directly (mirroring removed)
+            # Apply optional left/right mirroring before plotting
+            try:
+                if getattr(config, "datamirror", 0) == 1:
+                    data = data[::-1]
+            except Exception:
+                pass
+
+            # Plot raw/intensity data directly
             CCDplot.a.plot(x_values, data, alpha=alpha)
             CCDplot.a.set_ylabel("Intensity")
             CCDplot.a.set_xlabel(x_label)
@@ -543,7 +550,14 @@ class BuildPanel(ttk.Frame):
                 alpha = float(self.opacity_scale.get()) / 100.0
             except Exception:
                 alpha = 1.0
-            # Plot raw data directly (mirroring removed)
+            # Apply optional left/right mirroring before plotting
+            try:
+                if getattr(config, "datamirror", 0) == 1:
+                    data = data[::-1]
+            except Exception:
+                pass
+
+            # Plot raw data directly
             CCDplot.a.plot(x_values, data, alpha=alpha)
             CCDplot.a.set_ylabel("ADCcount")
             CCDplot.a.set_xlabel(x_label)
@@ -713,6 +727,17 @@ class BuildPanel(ttk.Frame):
         )
         self.cbalance.grid(column=1, row=plotmode_row + 1, sticky="w", padx=5)
 
+        # Mirror left/right: place below the balance checkbox
+        self.mirror = tk.IntVar()
+        self.cmirror = ttk.Checkbutton(
+            self,
+            text="Mirror data",
+            variable=self.mirror,
+            onvalue=1,
+            offvalue=0,
+        )
+        self.cmirror.grid(column=1, row=plotmode_row + 2, sticky="w", padx=5)
+
         # Show colors checkbox
         self.cshowcolors = ttk.Checkbutton(
             self,
@@ -722,7 +747,8 @@ class BuildPanel(ttk.Frame):
             offvalue=0,
             command=self.toggle_spectrum_colors,
         )
-        self.cshowcolors.grid(column=1, row=plotmode_row + 2, sticky="w", padx=5)
+        # moved down one row because mirror checkbox was inserted
+        self.cshowcolors.grid(column=1, row=plotmode_row + 3, sticky="w", padx=5)
 
         # setup traces to update the plot
         self.invert.trace_add(
@@ -737,10 +763,18 @@ class BuildPanel(ttk.Frame):
                 name, index, mode, balanced, CCDplot
             ),
         )
+        # mirror trace
+        self.mirror.trace_add(
+            "write",
+            lambda name, index, mode, mirror=self.mirror, CCDplot=CCDplot: self.MIRcallback(
+                name, index, mode, mirror, CCDplot
+            ),
+        )
 
         # set initial state
         self.invert.set(config.datainvert)
         self.balanced.set(config.balanced)
+        self.mirror.set(config.datamirror)
         self.show_colors.set(0)
 
         # help button
