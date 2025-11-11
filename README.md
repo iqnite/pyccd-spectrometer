@@ -6,7 +6,7 @@ pySPEC is a platform-independent graphical user-interface written in Python 3 fo
 
 ## Installation
 
-On Windows, download and run the installer from the [**Releases**](https://github.com/iqnite/pyccd-spectrometer/releases/latest) page.
+On Windows and macOS, download and run the installer (.exe or .dmg) from the [**Releases**](https://github.com/iqnite/pyccd-spectrometer/releases/latest) page.
 
 On other platforms, ensure you have Python 3 and the required dependencies installed. You can install the dependencies using pip:
 
