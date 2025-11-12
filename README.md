@@ -22,7 +22,7 @@ python3 main.pyw
 
 ## Utils
 
-In the utils folder one can find a script named "plotgraph.py". This file can be used to open the .dat files which are generated when saving a graph via pySPEC. It creates a new folder at the lcoation of the .dat file, which includes 2 .csv files (one is interpolated, the other one is the raw data) aswell as a .png of the plotted graphs.
+In the utils folder one can find a script named "plotgraph.py". This file can be used to open the .dat files which are generated when saving a graph via pySPEC. It creates a new folder at the lcoation of the .dat file, which includes a .csv file aswell as a .png of the plotted graphs.
 
 ## Credits
 
