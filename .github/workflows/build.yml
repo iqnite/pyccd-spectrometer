@@ -51,7 +51,7 @@ jobs:
             - name: Clean and build
               run: |
                   rm -rf build/ dist/ __pycache__/ *.dmg
-                  #pyinstaller --windowed --name=pySPEC --icon=assets/icon.icns --add-data="assets:assets" main.pyw
+                  pyinstaller --windowed --name=pySPEC --icon=assets/icon.icns --add-data="assets:assets" main.pyw
 
             - name: Create and upload DMG
               run: |
