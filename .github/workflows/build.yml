@@ -2,6 +2,8 @@ name: Build
 
 on:
     workflow_dispatch: {}
+    push:
+        tags: ["v*"]
 
 jobs:
     build-windows:
@@ -31,3 +33,31 @@ jobs:
               with:
                   name: pySPEC-exe
                   path: dist/pySPEC.exe
+    build-macos:
+        runs-on: macos-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.11"
+
+            - name: Install dependencies
+              run: |
+                  pip install -r requirements.txt pyinstaller
+
+            - name: Clean and build
+              run: |
+                  rm -rf build/ dist/ __pycache__/ *.dmg
+                  #pyinstaller --windowed --name=pySPEC --icon=assets/icon.icns --add-data="assets:assets" main.pyw
+
+            - name: Create and upload DMG
+              run: |
+                  hdiutil create -volname "pySPEC" -srcfolder "dist/pySPEC.app" -format UDZO "pySPEC.dmg"
+
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: pySPEC-macOS
+                  path: pySPEC.dmg
