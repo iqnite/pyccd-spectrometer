@@ -59,7 +59,7 @@ root.grid_columnconfigure(1, weight=0)  # Panel column fixed
 
 # Place widgets with proper expansion
 CCDplot.grid(row=0, column=0, sticky="nsew")
-panel.grid(row=0, column=1, sticky="ns")
+panel.grid(row=0, column=1, sticky="ns", padx=(35, 0))
 
 
 def main():

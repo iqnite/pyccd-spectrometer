@@ -100,7 +100,7 @@ class BuildPanel(ttk.Frame):
 
     def mode_fields(self, mode_row):
         """Add spectroscopy mode toggle"""
-        ttk.Label(self, text="Operation Mode:", font=("Arial", 10, "bold")).grid(
+        ttk.Label(self, text="Operation Mode:").grid(
             row=mode_row, column=0, padx=5, sticky="e"
         )
 
@@ -648,7 +648,7 @@ class BuildPanel(ttk.Frame):
     def collectfields(self, collect_row, SerQueue, progress_var):
         # collect and stop buttons
         self.buttonframe = ttk.Frame(self)
-        self.buttonframe.grid(row=collect_row, columnspan=2)
+        self.buttonframe.grid(row=collect_row, columnspan=2, padx=(35, 0))
         self.bcollect = ttk.Button(
             self.buttonframe,
             text="Collect",
@@ -753,7 +753,7 @@ class BuildPanel(ttk.Frame):
     def saveopenfields(self, save_row, CCDplot):
         # setup save/open buttons
         self.fileframe = ttk.Frame(self)
-        self.fileframe.grid(row=save_row, columnspan=2)
+        self.fileframe.grid(row=save_row, columnspan=2, padx=(40, 0))
         self.bopen = ttk.Button(
             self.fileframe,
             text="Open",
