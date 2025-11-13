@@ -74,7 +74,7 @@ def add_spectrum_gradient(ax, x_min, x_max, y_min, y_max):
         extent=(x_min, x_max, y_min, y_max),
         origin="lower",
         aspect="auto",
-        regression="bilinear",
+        interpolation="bilinear",
         alpha=0.6,
         zorder=-1,
     )

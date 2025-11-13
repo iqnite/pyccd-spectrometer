@@ -26,7 +26,7 @@ def resource_path(relative_path: str) -> str:
 
 
 icon = Image.open(resource_path("assets/icon.png"))
-icon = icon.resize((32, 32))
+icon = icon.resize((1024, 1024))
 icon_tk = ImageTk.PhotoImage(icon)
 root.iconphoto(True, cast(tk.PhotoImage, icon_tk))
 root.state("zoomed")

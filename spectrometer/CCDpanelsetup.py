@@ -29,6 +29,7 @@ from tkinter import ttk
 import numpy as np
 import serial
 import math
+import webbrowser
 
 from spectrometer import config, CCDhelp, CCDserial, CCDfiles
 from spectrometer.calibration import default_calibration
@@ -207,11 +208,6 @@ class BuildPanel(ttk.Frame):
         )
         self.firmware_dropdown.grid(column=1, row=device_row + 2, padx=5, sticky="w")
         self.firmware_type.trace_add("write", self.update_firmware)
-        # help button
-        self.bhdev = ttk.Button(
-            self, text="?", command=lambda helpfor=0: CCDhelp.helpme(helpfor)
-        )
-        self.bhdev.grid(row=device_row, column=3, padx=5)
 
     def update_firmware(self, *args):
         if self.firmware_type.get() == "STM32F103":
@@ -269,12 +265,6 @@ class BuildPanel(ttk.Frame):
         self.lccdstatus.grid(column=1, row=shicg_row + 3, pady=5, sticky="w")
         self.ltint = tk.Label(self, textvariable=self.tint_statuscolor)
         self.ltint.grid(column=1, row=shicg_row + 4, pady=5, sticky="w")
-
-        # Help button
-        self.bhccd = ttk.Button(
-            self, text="?", command=lambda helpfor=1: CCDhelp.helpme(helpfor)
-        )
-        self.bhccd.grid(row=shicg_row, column=3)
 
         # Set initial values
         self.SH.set(str(config.SHperiod))
@@ -633,11 +623,6 @@ class BuildPanel(ttk.Frame):
             command=lambda CONTvar=self.CONTvar: self.modeset(CONTvar),
         )
         self.rcontinuous.grid(column=1, row=continuous_row + 1, sticky="w", padx=5)
-        # help button
-        self.bhcon = ttk.Button(
-            self, text="?", command=lambda helpfor=2: CCDhelp.helpme(helpfor)
-        )
-        self.bhcon.grid(row=continuous_row, column=3)
         # set initial state
         self.CONTvar.set(config.AVGn[0])
 
@@ -659,11 +644,6 @@ class BuildPanel(ttk.Frame):
         self.AVGlabel.grid(column=2, row=avg_row, padx=5, pady=5, sticky="w")
         self.AVGscale.set(config.AVGn[1])
         self.AVGlabel.config(text=str(config.AVGn[1]))
-        # help button
-        self.bhavg = ttk.Button(
-            self, text="?", command=lambda helpfor=3: CCDhelp.helpme(helpfor)
-        )
-        self.bhavg.grid(row=avg_row, column=3)
 
     def collectfields(self, collect_row, SerQueue, progress_var):
         # collect and stop buttons
@@ -687,11 +667,6 @@ class BuildPanel(ttk.Frame):
             state=tk.DISABLED,
         )
         self.bstop.pack(side=tk.RIGHT, padx=5, pady=5, anchor="e")
-        # help button
-        self.bhcol = ttk.Button(
-            self, text="?", command=lambda helpfor=4: CCDhelp.helpme(helpfor)
-        )
-        self.bhcol.grid(row=collect_row, column=3)
         # progressbar
         self.progress = ttk.Progressbar(
             self, variable=progress_var, maximum=10, length=200
@@ -749,8 +724,6 @@ class BuildPanel(ttk.Frame):
         )
         # moved down one row because mirror checkbox was inserted
         self.cshowcolors.grid(column=1, row=plotmode_row + 3, sticky="w", padx=5)
-
-        # setup traces to update the plot
         self.invert.trace_add(
             "write",
             lambda name, index, mode, invert=self.invert, CCDplot=CCDplot: self.RAWcallback(
@@ -776,12 +749,6 @@ class BuildPanel(ttk.Frame):
         self.balanced.set(config.balanced)
         self.mirror.set(config.datamirror)
         self.show_colors.set(0)
-
-        # help button
-        self.bhplo = ttk.Button(
-            self, text="?", command=lambda helpfor=6: CCDhelp.helpme(helpfor)
-        )
-        self.bhplo.grid(row=plotmode_row, column=3)
 
     def saveopenfields(self, save_row, CCDplot):
         # setup save/open buttons
@@ -817,12 +784,6 @@ class BuildPanel(ttk.Frame):
         self.bcalib.pack(
             side=tk.LEFT, padx=(5, 0), pady=5
         )  # Add some padding to separate from save button
-
-        # help button
-        self.bhsav = ttk.Button(
-            self, text="?", command=lambda helpfor=5: CCDhelp.helpme(helpfor)
-        )
-        self.bhsav.grid(row=save_row, column=3)
 
         # Add a little vertical spacing before the placeholder controls
         self.grid_rowconfigure(save_row + 1, minsize=12)
@@ -981,9 +942,27 @@ class BuildPanel(ttk.Frame):
         return ()
 
     def aboutbutton(self, about_row):
+        # Create a frame to hold both buttons
+        button_frame = ttk.Frame(self)
+        button_frame.grid(row=about_row, columnspan=3, sticky="EW", padx=5)
+        
         self.babout = ttk.Button(
-            self,
+            button_frame,
             text="About",
             command=lambda helpfor=10: CCDhelp.helpme(helpfor),
         )
-        self.babout.grid(row=about_row, columnspan=3, sticky="EW", padx=5)
+        self.babout.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
+        
+        self.bhelp = ttk.Button(
+            button_frame,
+            text="Help",
+            command=self.open_help_url,
+        )
+        self.bhelp.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(2, 0))
+    
+    def open_help_url(self):
+        """Open the help URL in the default browser"""
+        try:
+            webbrowser.open("https://www.astrolens.net/pyspec-help")
+        except Exception as e:
+            print(f"Failed to open browser: {e}")
