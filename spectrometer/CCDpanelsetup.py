@@ -567,7 +567,7 @@ class BuildPanel(ttk.Frame):
         # Update spectrum background
         self.CCDplot.set_show_colors(self.show_colors.get())
 
-        # If interpolation toggle is active, compute and plot interpolated curve
+        # If regression toggle is active, compute and plot interpolated curve
         try:
             if getattr(self, "ph_checkbox_var", None) and self.ph_checkbox_var.get() == 1:
                 # Use the same data that was plotted (data variable)
@@ -601,7 +601,7 @@ class BuildPanel(ttk.Frame):
                 # Plot interpolated curve as a distinct coloured line
                 CCDplot.a.plot(xs_plot, ys_interp, color="red", lw=0.9, alpha=0.9, label="interpolated")
         except Exception:
-            # don't let interpolation failures break the plotting
+            # don't let regression failures break the plotting
             pass
 
         CCDplot.canvas.draw()
@@ -832,14 +832,14 @@ class BuildPanel(ttk.Frame):
         self.ph_checkbox_var = tk.IntVar(value=0)
         self.ph_check = ttk.Checkbutton(
             self,
-            text="Toggle interpolation",
+            text="Toggle regression",
             variable=self.ph_checkbox_var,
             onvalue=1,
             offvalue=0,
         )
         self.ph_check.grid(column=1, row=save_row + 2, sticky="w", padx=5)
         # Trace the checkbox so we can enable/disable the slider dynamically
-        # Also trigger a plot update so the interpolation overlay appears immediately
+        # Also trigger a plot update so the regression overlay appears immediately
         self.ph_checkbox_var.trace_add(
             "write",
             lambda *args, CCDplot=CCDplot: (self._ph_check_changed(), self.updateplot(CCDplot)),
@@ -913,7 +913,7 @@ class BuildPanel(ttk.Frame):
         except Exception:
             # fallback to integer display
             self.ph_label.config(text=str(int(round(v))))
-        # If interpolation is enabled, update the plot so changes take effect immediately
+        # If regression is enabled, update the plot so changes take effect immediately
         try:
             if getattr(self, "ph_checkbox_var", None) and self.ph_checkbox_var.get() == 1:
                 try:

@@ -16,8 +16,8 @@ as YYYYMMDD_HHMMSS so it is safe in filenames.
 
 Files created inside that folder:
   - <prefix>_Ipixel.csv                    (pixel, ADC, Ipixel)
-  - <prefix>_interpolated_sample.csv      (high-res sampled interpolation)
-  - <prefix>_plot.png                     (ADC + Ipixel plot with interpolation overlay)
+  - <prefix>_interpolated_sample.csv      (high-res sampled regression)
+  - <prefix>_plot.png                     (ADC + Ipixel plot with regression overlay)
   - <prefix>_interpolator.pkl             (pickled interpolator object, optional)
 
 Usage:
@@ -162,14 +162,14 @@ def format_ctime_for_name(path: Path) -> str:
     return dt.strftime("%Y%m%d_%H%M%S")
 
 def main():
-    parser = argparse.ArgumentParser(description="Open a .dat file via dialog and produce intensity + interpolation outputs in a new timestamped folder.")
+    parser = argparse.ArgumentParser(description="Open a .dat file via dialog and produce intensity + regression outputs in a new timestamped folder.")
     parser.add_argument("infile", nargs="?", default=None, help="optional path to .dat file (if omitted, a file dialog will open)")
-    parser.add_argument("--interp", choices=["spline","cubic","linear"], default="spline", help="interpolation method for overlay and sampled CSV")
+    parser.add_argument("--interp", choices=["spline","cubic","linear"], default="spline", help="regression method for overlay and sampled CSV")
     parser.add_argument("--dark-method", choices=["median","mean"], default="median", help="how to estimate ADC_dark")
     parser.add_argument("--samples", type=int, default=10000, help="number of points to sample the interpolated function")
     parser.add_argument("--smooth", type=float, default=0.2, help="smoothing multiplier for spline (larger -> smoother). Default 0.2")
     # Default smooths: keep only the weaker values (remove 0.1 and 0.2 as requested)
-    parser.add_argument("--smooths", type=str, default="0.01,0.02,0.05", help="comma-separated list of smoothing multipliers to plot multiple interpolations (e.g. '0.01,0.02,0.05')")
+    parser.add_argument("--smooths", type=str, default="0.01,0.02,0.05", help="comma-separated list of smoothing multipliers to plot multiple regressions (e.g. '0.01,0.02,0.05')")
     parser.add_argument("--linewidth", type=float, default=0.6, help="default line width for PNG output (thin lines)")
     args = parser.parse_args()
 
@@ -225,7 +225,7 @@ def main():
     # Prepare sampling grid
     xs = np.linspace(pixels.min(), pixels.max(), max(1000, args.samples))
 
-    # Parse multi-smoothing values for plotting several interpolation strengths
+    # Parse multi-smoothing values for plotting several regression strengths
     try:
         smooth_values = [float(s.strip()) for s in str(args.smooths).split(",") if s.strip()]
     except Exception:
@@ -263,7 +263,7 @@ def main():
     ax1.grid(True, alpha=0.3)
 
     # Bottom: interpolated / smoothed (separate plot). Plot multiple curves with different smoothing strengths.
-    # Plot a very faint original Ipixel trace in the interpolation panel for reference
+    # Plot a very faint original Ipixel trace in the regression panel for reference
     orig_on_xs = np.interp(xs, pixels, intensities)
     # Slightly more visible raw trace for reference
     ax2.plot(xs, orig_on_xs, color="gray", lw=0.8, alpha=0.28, label="raw Ipixel (faint)")
