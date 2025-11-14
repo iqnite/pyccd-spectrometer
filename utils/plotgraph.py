@@ -155,7 +155,7 @@ def make_interpolator(
                 intensities,
                 kind=kind,
                 bounds_error=False,
-                fill_value="extrapolate",
+                fill_value="extrapolate",  # type: ignore
             )
             return f, f"interp1d({kind})"
     except Exception:
