@@ -26,7 +26,7 @@ Usage:
     A file dialog will open; pick your lamp.dat (or any .dat file).
 
   - Or run and pass a path to skip the dialog:
-      python plot_lamp_filepicker.py "C:\path\to\lamp.dat"
+      python plot_lamp_filepicker.py "C:\\path\\to\\lamp.dat"
 
 Notes:
   - If you prefer not to have a GUI, pass the file path as the first argument.
@@ -38,12 +38,14 @@ from pathlib import Path
 import sys
 import os
 import csv
-import pickle
 import numpy as np
 import matplotlib
-matplotlib.use("Agg")   # safe backend for non-interactive use
+
+matplotlib.use("Agg")  # safe backend for non-interactive use
 import matplotlib.pyplot as plt
 from datetime import datetime
+from scipy.interpolate import UnivariateSpline, interp1d
+
 
 def choose_file_with_dialog(initialdir: str | None = None) -> Path | None:
     try:
@@ -56,12 +58,15 @@ def choose_file_with_dialog(initialdir: str | None = None) -> Path | None:
     root.withdraw()
     # On Windows the dialog will be a native explorer-file dialog
     filetypes = [("DAT files", "*.dat"), ("All files", "*.*")]
-    filename = filedialog.askopenfilename(title="Select .dat file", initialdir=initialdir or ".", filetypes=filetypes)
+    filename = filedialog.askopenfilename(
+        title="Select .dat file", initialdir=initialdir or ".", filetypes=filetypes
+    )
     root.update()
     root.destroy()
     if not filename:
         return None
     return Path(filename).expanduser().resolve()
+
 
 def read_file_lines(filename: str):
     encodings = ["utf-8", "cp1252", "latin-1"]
@@ -83,6 +88,7 @@ def read_file_lines(filename: str):
     print("Opened file via binary fallback, decoded with errors='replace'.")
     return lines
 
+
 def parse_lines_to_arrays(lines):
     pixels = []
     adcs = []
@@ -98,8 +104,10 @@ def parse_lines_to_arrays(lines):
             a = float(parts[1])
         except Exception:
             try:
-                p = int(''.join(ch for ch in parts[0] if (ch.isdigit() or ch == '-')))
-                a = float(''.join(ch for ch in parts[1] if (ch.isdigit() or ch in ".-eE")))
+                p = int("".join(ch for ch in parts[0] if (ch.isdigit() or ch == "-")))
+                a = float(
+                    "".join(ch for ch in parts[1] if (ch.isdigit() or ch in ".-eE"))
+                )
             except Exception:
                 continue
         pixels.append(p)
@@ -107,6 +115,7 @@ def parse_lines_to_arrays(lines):
     if not pixels:
         raise ValueError("No valid pixel/ADC pairs found in file.")
     return np.array(pixels, dtype=int), np.array(adcs, dtype=float)
+
 
 def estimate_dark(pixels: np.ndarray, adcs: np.ndarray, method: str = "median"):
     mask = ((pixels >= 1) & (pixels <= 32)) | ((pixels >= 3679) & (pixels <= 3694))
@@ -116,41 +125,57 @@ def estimate_dark(pixels: np.ndarray, adcs: np.ndarray, method: str = "median"):
         if n >= 64:
             dark_vals = np.concatenate((adcs[:32], adcs[-32:]))
         else:
-            dark_vals = adcs[:max(1, n//10)]
+            dark_vals = adcs[: max(1, n // 10)]
     if method == "median":
         return float(np.median(dark_vals)), dark_vals
     else:
         return float(np.mean(dark_vals)), dark_vals
 
-def make_interpolator(pixels: np.ndarray, intensities: np.ndarray, method: str = "spline", smooth: float = 0.2):
+
+def make_interpolator(
+    pixels: np.ndarray,
+    intensities: np.ndarray,
+    method: str = "spline",
+    smooth: float = 0.2,
+):
     """Create an interpolator. `smooth` increases smoothing when using spline (larger -> smoother).
 
     Returns (callable, description)
     """
     try:
         if method == "spline":
-            from scipy.interpolate import UnivariateSpline
             # stronger smoothing by default: scale factor (user-controlled)
             s = max(0.0, len(pixels) * np.var(intensities) * float(smooth))
             spline = UnivariateSpline(pixels, intensities, s=s)
             return spline, f"UnivariateSpline(s={s:.3g})"
         else:
-            from scipy.interpolate import interp1d
             kind = "cubic" if method == "cubic" else "linear"
-            f = interp1d(pixels, intensities, kind=kind, bounds_error=False, fill_value="extrapolate")
+            f = interp1d(
+                pixels,
+                intensities,
+                kind=kind,
+                bounds_error=False,
+                fill_value="extrapolate",
+            )
             return f, f"interp1d({kind})"
     except Exception:
+
         def lininterp(x):
             return np.interp(x, pixels, intensities)
+
         return lininterp, "numpy.interp(linear,fallback)"
 
-def save_pixel_csv(pixels: np.ndarray, adcs: np.ndarray, intensities: np.ndarray, out_csv: Path):
+
+def save_pixel_csv(
+    pixels: np.ndarray, adcs: np.ndarray, intensities: np.ndarray, out_csv: Path
+):
     header = ["pixel", "ADC", "Ipixel"]
     with out_csv.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(header)
         for p, a, i in zip(pixels, adcs, intensities):
             w.writerow([int(p), float(a), float(i)])
+
 
 def format_ctime_for_name(path: Path) -> str:
     # Use filesystem creation time when available
@@ -161,16 +186,54 @@ def format_ctime_for_name(path: Path) -> str:
     dt = datetime.fromtimestamp(ctime)
     return dt.strftime("%Y%m%d_%H%M%S")
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Open a .dat file via dialog and produce intensity + regression outputs in a new timestamped folder.")
-    parser.add_argument("infile", nargs="?", default=None, help="optional path to .dat file (if omitted, a file dialog will open)")
-    parser.add_argument("--interp", choices=["spline","cubic","linear"], default="spline", help="regression method for overlay and sampled CSV")
-    parser.add_argument("--dark-method", choices=["median","mean"], default="median", help="how to estimate ADC_dark")
-    parser.add_argument("--samples", type=int, default=10000, help="number of points to sample the interpolated function")
-    parser.add_argument("--smooth", type=float, default=0.2, help="smoothing multiplier for spline (larger -> smoother). Default 0.2")
+    parser = argparse.ArgumentParser(
+        description="Open a .dat file via dialog and produce intensity + regression outputs in a new timestamped folder."
+    )
+    parser.add_argument(
+        "infile",
+        nargs="?",
+        default=None,
+        help="optional path to .dat file (if omitted, a file dialog will open)",
+    )
+    parser.add_argument(
+        "--interp",
+        choices=["spline", "cubic", "linear"],
+        default="spline",
+        help="regression method for overlay and sampled CSV",
+    )
+    parser.add_argument(
+        "--dark-method",
+        choices=["median", "mean"],
+        default="median",
+        help="how to estimate ADC_dark",
+    )
+    parser.add_argument(
+        "--samples",
+        type=int,
+        default=10000,
+        help="number of points to sample the interpolated function",
+    )
+    parser.add_argument(
+        "--smooth",
+        type=float,
+        default=0.2,
+        help="smoothing multiplier for spline (larger -> smoother). Default 0.2",
+    )
     # Default smooths: keep only the weaker values (remove 0.1 and 0.2 as requested)
-    parser.add_argument("--smooths", type=str, default="0.01,0.02,0.05", help="comma-separated list of smoothing multipliers to plot multiple regressions (e.g. '0.01,0.02,0.05')")
-    parser.add_argument("--linewidth", type=float, default=0.6, help="default line width for PNG output (thin lines)")
+    parser.add_argument(
+        "--smooths",
+        type=str,
+        default="0.01,0.02,0.05",
+        help="comma-separated list of smoothing multipliers to plot multiple regressions (e.g. '0.01,0.02,0.05')",
+    )
+    parser.add_argument(
+        "--linewidth",
+        type=float,
+        default=0.6,
+        help="default line width for PNG output (thin lines)",
+    )
     args = parser.parse_args()
 
     infile_path: Path | None = None
@@ -186,7 +249,9 @@ def main():
             if args.infile:
                 infile_path = Path(args.infile).expanduser().resolve()
             else:
-                p = input("No file chosen. Enter the path to the .dat file (or press Enter to quit): ").strip()
+                p = input(
+                    "No file chosen. Enter the path to the .dat file (or press Enter to quit): "
+                ).strip()
                 if not p:
                     print("No file provided. Exiting.")
                     sys.exit(1)
@@ -213,7 +278,9 @@ def main():
     print(f"Read {pixels.size} samples (pixel range {pixels.min()}..{pixels.max()})")
 
     adc_dark, dark_values = estimate_dark(pixels, adcs, method=args.dark_method)
-    print(f"Estimated ADC_dark ({args.dark_method}) = {adc_dark:.3f} from {dark_values.size} dummy pixels")
+    print(
+        f"Estimated ADC_dark ({args.dark_method}) = {adc_dark:.3f} from {dark_values.size} dummy pixels"
+    )
     intensities = adc_dark - adcs
 
     # Save per-pixel CSV
@@ -227,13 +294,17 @@ def main():
 
     # Parse multi-smoothing values for plotting several regression strengths
     try:
-        smooth_values = [float(s.strip()) for s in str(args.smooths).split(",") if s.strip()]
+        smooth_values = [
+            float(s.strip()) for s in str(args.smooths).split(",") if s.strip()
+        ]
     except Exception:
         smooth_values = [args.smooth]
 
     interp_results = []
     for s_val in smooth_values:
-        interp_fn_i, interp_kind_i = make_interpolator(pixels, intensities, method=args.interp, smooth=s_val)
+        interp_fn_i, interp_kind_i = make_interpolator(
+            pixels, intensities, method=args.interp, smooth=s_val
+        )
         try:
             ys_i = interp_fn_i(xs)
             ys_i = np.asarray(ys_i, dtype=float)
@@ -246,7 +317,9 @@ def main():
     fig, (ax0, ax1, ax2) = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
     lw = float(args.linewidth)
     ax0.plot(pixels, adcs, color="tab:blue", lw=lw, label="ADC (raw)")
-    ax0.axhline(adc_dark, color="tab:orange", ls="--", lw=lw, label=f"ADC_dark={adc_dark:.2f}")
+    ax0.axhline(
+        adc_dark, color="tab:orange", ls="--", lw=lw, label=f"ADC_dark={adc_dark:.2f}"
+    )
     ax0.set_ylabel("ADC counts")
     ax0.legend(fontsize="small")
     ax0.grid(True, alpha=0.3)
@@ -255,7 +328,13 @@ def main():
     # Use max-based inversion to keep signal in the same positive range
     y_flipped = np.max(intensities) - intensities
     # Make the flipped trace more visually distinct: green, slightly thicker
-    ax1.plot(pixels, y_flipped, color="green", lw=max(0.8, lw * 1.2), label="Ipixel (flipped)")
+    ax1.plot(
+        pixels,
+        y_flipped,
+        color="green",
+        lw=max(0.8, lw * 1.2),
+        label="Ipixel (flipped)",
+    )
     ax1.set_ylabel("Flipped Ipixel")
     # Visually invert the y-axis so the panel appears upside-down (peaks downwards)
     ax1.invert_yaxis()
@@ -266,16 +345,30 @@ def main():
     # Plot a very faint original Ipixel trace in the regression panel for reference
     orig_on_xs = np.interp(xs, pixels, intensities)
     # Slightly more visible raw trace for reference
-    ax2.plot(xs, orig_on_xs, color="gray", lw=0.8, alpha=0.28, label="raw Ipixel (faint)")
+    ax2.plot(
+        xs, orig_on_xs, color="gray", lw=0.8, alpha=0.28, label="raw Ipixel (faint)"
+    )
 
     # Use only the requested distinct colors (no green/yellow): blue, red, purple
     palette = ["blue", "red", "purple"]
     colors = [palette[i % len(palette)] for i in range(len(interp_results))]
     import math
+
     for (s_val, kind, ys_i), col in zip(interp_results, colors):
         # Force s=0.05 to green for emphasis per request (use isclose for safety)
-        plot_col = "green" if math.isclose(float(s_val), 0.05, rel_tol=1e-6, abs_tol=1e-9) else col
-        ax2.plot(xs, ys_i, color=plot_col, lw=max(0.8, lw), alpha=0.95, label=f"s={s_val} ({kind})")
+        plot_col = (
+            "green"
+            if math.isclose(float(s_val), 0.05, rel_tol=1e-6, abs_tol=1e-9)
+            else col
+        )
+        ax2.plot(
+            xs,
+            ys_i,
+            color=plot_col,
+            lw=max(0.8, lw),
+            alpha=0.95,
+            label=f"s={s_val} ({kind})",
+        )
     ax2.set_xlabel("pixel number")
     ax2.set_ylabel("Ipixel (interpolated)")
     ax2.legend(fontsize="small")
@@ -301,6 +394,7 @@ def main():
     plt.close(fig)
     print(f"Saved plot -> {pngfile}")
     print("Done. All generated files are in:", out_dir)
+
 
 if __name__ == "__main__":
     main()
