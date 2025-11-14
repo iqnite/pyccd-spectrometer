@@ -960,6 +960,32 @@ class BuildPanel(ttk.Frame):
         )
         self.bhelp.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(2, 0))
     
+         # Add AstroLens logo below the buttons
+        try:
+            from PIL import Image, ImageTk
+            import os
+            
+            # Get the path to the PNG file
+            logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "astrolens.png")
+            
+            if os.path.exists(logo_path):
+                logo_image = Image.open(logo_path)
+                
+                # Calculate proper aspect ratio resize
+                # Original SVG is 645.31 x 172.4 (aspect ratio ~3.74:1)
+                target_width = 350  # Adjust this to your preferred width
+                aspect_ratio = logo_image.width / logo_image.height
+                target_height = int(target_width / aspect_ratio)
+                
+                logo_image = logo_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+                logo_photo = ImageTk.PhotoImage(logo_image)
+                
+                self.logo_label = ttk.Label(self, image=logo_photo)
+                self.logo_label.image = logo_photo  # Keep a reference
+                self.logo_label.grid(row=about_row + 1, columnspan=3, pady=(40, 5), padx=(7,0))
+        except Exception as e:
+            print(f"Could not load logo: {e}")
+
     def open_help_url(self):
         """Open the help URL in the default browser"""
         try:
