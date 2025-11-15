@@ -5,7 +5,13 @@ a = Analysis(
     ['main.pyw'],
     pathex=[],
     binaries=[],
-    datas=[('assets/icon.png', 'assets', 'assets/astrolens.png', 'assets/palette.png', 'assets/save.png', 'assets/lens.png')],
+    datas=[
+        ('assets/icon.png', 'assets'),
+        ('assets/astrolens.png', 'assets'),
+        ('assets/palette.png', 'assets'),
+        ('assets/save.png', 'assets'),
+        ('assets/lens.png', 'assets'),
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -14,6 +20,7 @@ a = Analysis(
     noarchive=False,
     optimize=1,
 )
+
 pyz = PYZ(a.pure)
 
 exe = EXE(
