@@ -843,18 +843,7 @@ class BuildPanel(ttk.Frame):
             side=tk.LEFT, padx=(5, 0), pady=5
         )  # Add some padding to separate from save button
 
-        # Add an icon button to the right of Calibration - opens color picker
-        # Create empty button first to match other button sizes
-        self.b_icon = ttk.Button(
-            self.fileframe,
-            text="",
-            style="Accent.TButton",
-            width=3,
-            command=self.open_color_picker,
-        )
-        self.b_icon.pack(side=tk.LEFT, padx=(5, 0), pady=5)
-
-        # Now overlay the icon image on top of the button
+        # Now overlay the icon image on top of the buttons
         try:
             from PIL import Image, ImageTk
             import os
@@ -886,7 +875,7 @@ class BuildPanel(ttk.Frame):
                 icon_image = icon_solid.resize(target_size, resample)
                 icon_photo = ImageTk.PhotoImage(icon_image)
 
-                # Place label with icon on top of the button
+                # Place label with icon on top of the palette button
                 self.icon_overlay = tk.Label(
                     self.b_icon,
                     image=icon_photo,
@@ -1194,6 +1183,16 @@ class BuildPanel(ttk.Frame):
             self.color_window.destroy()
         self.color_window = None
 
+    def zoom_mode(self):
+        """Activate zoom mode on the plot"""
+        if hasattr(self.CCDplot, 'navigation_toolbar'):
+            self.CCDplot.navigation_toolbar.zoom()
+
+    def save_figure(self):
+        """Open save dialog to save the figure"""
+        if hasattr(self.CCDplot, 'navigation_toolbar'):
+            self.CCDplot.navigation_toolbar.save_figure()
+
     def updateplotfields(self, update_row, CCDplot):
         self.bupdate = ttk.Button(
             self,
@@ -1289,23 +1288,146 @@ class BuildPanel(ttk.Frame):
         return ()
 
     def aboutbutton(self, about_row):
-        # Create a frame to hold both buttons
+        # Create a frame to hold icon buttons
         button_frame = ttk.Frame(self)
-        button_frame.grid(row=about_row, columnspan=3, sticky="EW", padx=5)
+        button_frame.grid(row=about_row, columnspan=3, padx=(0, 30))
         
-        self.babout = ttk.Button(
+        # Create three icon buttons
+        self.b_icon = ttk.Button(
             button_frame,
-            text="About",
-            command=lambda helpfor=10: CCDhelp.helpme(helpfor),
+            text="",
+            style="Accent.TButton",
+            width=3,
+            command=self.open_color_picker,
         )
-        self.babout.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
+        self.b_icon.pack(side=tk.LEFT, padx=(0, 2))
+
+        self.b_zoom = ttk.Button(
+            button_frame,
+            text="",
+            style="Accent.TButton",
+            width=3,
+            command=self.save_figure,
+        )
+        self.b_zoom.pack(side=tk.LEFT, padx=2)
+
+        self.b_save_img = ttk.Button(
+            button_frame,
+            text="",
+            style="Accent.TButton",
+            width=3,
+            command=self.zoom_mode,
+        )
+        self.b_save_img.pack(side=tk.LEFT, padx=(2, 5))
+        
+        # Add icon overlays to the buttons
+        try:
+            from PIL import Image, ImageTk
+            import os
+
+            base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+            preferred = os.path.join(base_dir, "palette.png")
+            fallback = os.path.join(base_dir, "astrolens.png")
+            icon_path = preferred if os.path.exists(preferred) else fallback
+
+            if os.path.exists(icon_path):
+                icon_image = Image.open(icon_path).convert("RGBA")
+
+                # Make the icon solid black while preserving transparency
+                try:
+                    alpha = icon_image.getchannel("A")
+                except Exception:
+                    alpha = icon_image.convert("L")
+                black_img = Image.new("RGBA", icon_image.size, (0, 0, 0, 255))
+                icon_solid = Image.new("RGBA", icon_image.size, (0, 0, 0, 0))
+                icon_solid.paste(black_img, (0, 0), mask=alpha)
+
+                # Resize icon to reasonable size
+                target_size = (16, 16)
+                try:
+                    resample = Image.Resampling.LANCZOS
+                except Exception:
+                    resample = Image.LANCZOS
+                icon_image = icon_solid.resize(target_size, resample)
+                icon_photo = ImageTk.PhotoImage(icon_image)
+
+                # Place label with icon on palette button
+                self.icon_overlay = tk.Label(
+                    self.b_icon,
+                    image=icon_photo,
+                    bg="#ffc200",
+                    bd=0,
+                    cursor="hand2",
+                )
+                self.icon_overlay.image = icon_photo
+                self.icon_overlay.place(relx=0.5, rely=0.5, anchor="center")
+                self.icon_overlay.bind("<Button-1>", lambda e: self.open_color_picker())
+
+                # Place icon on zoom button (use save.png)
+                save_icon_path = os.path.join(base_dir, "save.png")
+                if os.path.exists(save_icon_path):
+                    save_icon_image = Image.open(save_icon_path).convert("RGBA")
+                    # Make black
+                    try:
+                        save_alpha = save_icon_image.getchannel("A")
+                    except Exception:
+                        save_alpha = save_icon_image.convert("L")
+                    save_black_img = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 255))
+                    save_icon_solid = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 0))
+                    save_icon_solid.paste(save_black_img, (0, 0), mask=save_alpha)
+                    save_icon_resized = save_icon_solid.resize(target_size, resample)
+                    icon_photo_zoom = ImageTk.PhotoImage(save_icon_resized)
+                else:
+                    icon_photo_zoom = ImageTk.PhotoImage(icon_solid.resize(target_size, resample))
+                
+                self.icon_overlay_zoom = tk.Label(
+                    self.b_zoom,
+                    image=icon_photo_zoom,
+                    bg="#ffc200",
+                    bd=0,
+                    cursor="hand2",
+                )
+                self.icon_overlay_zoom.image = icon_photo_zoom
+                self.icon_overlay_zoom.place(relx=0.5, rely=0.5, anchor="center")
+                self.icon_overlay_zoom.bind("<Button-1>", lambda e: self.save_figure())
+
+                # Place icon on save_img button (use lens.png)
+                lens_icon_path = os.path.join(base_dir, "lens.png")
+                if os.path.exists(lens_icon_path):
+                    lens_icon_image = Image.open(lens_icon_path).convert("RGBA")
+                    # Make black
+                    try:
+                        lens_alpha = lens_icon_image.getchannel("A")
+                    except Exception:
+                        lens_alpha = lens_icon_image.convert("L")
+                    lens_black_img = Image.new("RGBA", lens_icon_image.size, (0, 0, 0, 255))
+                    lens_icon_solid = Image.new("RGBA", lens_icon_image.size, (0, 0, 0, 0))
+                    lens_icon_solid.paste(lens_black_img, (0, 0), mask=lens_alpha)
+                    lens_icon_resized = lens_icon_solid.resize(target_size, resample)
+                    icon_photo_save = ImageTk.PhotoImage(lens_icon_resized)
+                else:
+                    icon_photo_save = ImageTk.PhotoImage(icon_solid.resize(target_size, resample))
+                
+                self.icon_overlay_save = tk.Label(
+                    self.b_save_img,
+                    image=icon_photo_save,
+                    bg="#ffc200",
+                    bd=0,
+                    cursor="hand2",
+                )
+                self.icon_overlay_save.image = icon_photo_save
+                self.icon_overlay_save.place(relx=0.5, rely=0.5, anchor="center")
+                self.icon_overlay_save.bind("<Button-1>", lambda e: self.zoom_mode())
+        except Exception as e:
+            print(f"Could not create icon overlays: {e}")
         
         self.bhelp = ttk.Button(
             button_frame,
             text="Help",
+            width=11,
             command=self.open_help_url,
         )
-        self.bhelp.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=(2, 0))
+        self.bhelp.pack(side=tk.LEFT, padx=(0, 0))
     
          # Add AstroLens logo below the buttons
         try:

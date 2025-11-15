@@ -28,22 +28,10 @@ class BuildPlot(ttk.Frame):
         # Use sticky="nsew" to make canvas expand
         self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
 
-        toolbarFrame = ttk.Frame(master=self)
-        toolbarFrame.grid(row=1, column=0, sticky="ew")
-        
-        # Customize toolbar to remove first 3 buttons (Home, Back, Forward)
-        NavigationToolbar2Tk.toolitems = [t for t in NavigationToolbar2Tk.toolitems if t[0] not in ('Home', 'Back', 'Forward')]
-        
-        self.navigation_toolbar = NavigationToolbar2Tk(self.canvas, toolbarFrame)
-
-        # Override toolbar colors to force light mode
-        try:
-            for child in self.navigation_toolbar.winfo_children():
-                if isinstance(child, (tk.Button, tk.Checkbutton)):
-                    child.configure(bg="lightgray", activebackground="gray")
-                    child.update()
-        except Exception as e:
-            print(f"Could not set toolbar colors: {e}")
+        # Create a hidden frame for the toolbar (NavigationToolbar2Tk uses pack internally)
+        toolbar_container = ttk.Frame(self)
+        self.navigation_toolbar = NavigationToolbar2Tk(self.canvas, toolbar_container)
+        # Don't grid the toolbar_container at all - keeps it hidden
 
         self.current_data = None  # store last spectrum
 
