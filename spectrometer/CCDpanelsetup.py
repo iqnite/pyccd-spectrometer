@@ -90,7 +90,7 @@ class BuildPanel(ttk.Frame):
         self.lheader = ttk.Label(
             self,
             text="pySPEC",
-            font=("Arial", 16, "bold"),
+            font=("Avenir", 16, "bold"),
             foreground="#ffc200",
         )
         self.lheader.grid(row=0, column=2, pady=10, padx=5, sticky="e")
@@ -915,15 +915,23 @@ class BuildPanel(ttk.Frame):
             
         # Create a new top-level window
         self.color_window = tk.Toplevel(self.master)
-        self.color_window.title("Plot Color Settings")
-        self.color_window.geometry("350x200")
+        self.color_window.title("Plot Colour Settings")
         self.color_window.resizable(False, False)
+        
+        # Set window size and center it on screen
+        window_width = 350
+        window_height = 200
+        screen_width = self.color_window.winfo_screenwidth()
+        screen_height = self.color_window.winfo_screenheight()
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        self.color_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
         
         # Clean up reference when window is closed
         self.color_window.protocol("WM_DELETE_WINDOW", lambda: self.close_color_window())
         
         # Main plot color section
-        ttk.Label(self.color_window, text="Main Plot Color:", font=("Arial", 10, "bold")).pack(pady=(20, 5))
+        ttk.Label(self.color_window, text="Main Plot Colour:", font=("Avenir", 10, "bold")).pack(pady=(20, 5))
         
         main_color_frame = ttk.Frame(self.color_window)
         main_color_frame.pack(pady=5)
@@ -934,13 +942,13 @@ class BuildPanel(ttk.Frame):
         
         ttk.Button(
             main_color_frame,
-            text="Choose Color",
+            text="Choose Colour",
             style="Accent.TButton",
             command=lambda: self.choose_plot_color("main", self.color_window)
         ).pack(side=tk.LEFT, padx=5)
         
         # Regression plot color section
-        ttk.Label(self.color_window, text="Regression Line Color:", font=("Arial", 10, "bold")).pack(pady=(20, 5))
+        ttk.Label(self.color_window, text="Regression Line Colour:", font=("Avenir", 10, "bold")).pack(pady=(20, 5))
         
         regression_color_frame = ttk.Frame(self.color_window)
         regression_color_frame.pack(pady=5)
@@ -951,7 +959,7 @@ class BuildPanel(ttk.Frame):
         
         ttk.Button(
             regression_color_frame,
-            text="Choose Color",
+            text="Choose Colour",
             style="Accent.TButton",
             command=lambda: self.choose_plot_color("regression", self.color_window)
         ).pack(side=tk.LEFT, padx=5)
