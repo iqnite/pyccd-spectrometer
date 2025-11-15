@@ -58,6 +58,11 @@ class BuildPanel(ttk.Frame):
         # Initialize plot colors
         self.main_plot_color = "#1f77b4"  # Default matplotlib blue
         self.regression_color = "#d62728"  # Default red
+        self.compare_color = "#2ca02c"  # Default green for comparison data
+        
+        # Initialize comparison data storage
+        self.comparison_data = None
+        self.comparison_filename = None
 
         # Create all widgets and space between them
         self.header_fields()
@@ -598,6 +603,56 @@ class BuildPanel(ttk.Frame):
             # don't let regression failures break the plotting
             pass
 
+        # Plot comparison data if available
+        if self.comparison_data is not None:
+            try:
+                # Assume comparison data is in the same format as main data
+                # If it's a 2D array with x and y columns, use both
+                if self.comparison_data.ndim == 2 and self.comparison_data.shape[1] >= 2:
+                    compare_x = self.comparison_data[:, 0]
+                    compare_y = self.comparison_data[:, 1]
+                else:
+                    # If it's 1D, use pixel numbers as x
+                    compare_y = self.comparison_data.copy()
+                    compare_x = np.arange(len(compare_y))
+                
+                # Apply inversion if enabled (same as main data)
+                # For comparison data, inversion means inverting the y-values around their max
+                try:
+                    if config.datainvert == 1:
+                        # Invert the y-values (flip vertically)
+                        max_val = np.max(compare_y) if len(compare_y) > 0 else 1
+                        compare_y = max_val - compare_y + np.min(compare_y)
+                except Exception as e:
+                    print(f"Error inverting comparison data: {e}")
+                
+                # Apply mirroring if enabled (same as main data)
+                try:
+                    if getattr(config, "datamirror", 0) == 1:
+                        compare_y = compare_y[::-1]
+                        if compare_x is not None and len(compare_x) == len(compare_y):
+                            compare_x = compare_x[::-1]
+                except Exception as e:
+                    print(f"Error mirroring comparison data: {e}")
+                
+                # Normalize comparison data so the minimum is at y=0 (baseline at zero intensity)
+                try:
+                    min_val = np.min(compare_y)
+                    compare_y = compare_y - min_val
+                except Exception as e:
+                    print(f"Error normalizing comparison data: {e}")
+                
+                # Apply calibration to x-axis if in spectroscopy mode
+                if config.spectroscopy_mode and hasattr(default_calibration, "apply") and callable(default_calibration.apply):
+                    # If compare_x is already wavelengths, use as-is; otherwise convert from pixels
+                    if compare_x.max() < 4000:  # Likely pixel numbers
+                        compare_x = default_calibration.apply(compare_x.astype(int))
+                
+                CCDplot.a.plot(compare_x, compare_y, color=self.compare_color, lw=1.0, alpha=0.8, label=self.comparison_filename)
+                CCDplot.a.legend(loc='best', fontsize=8)
+            except Exception as e:
+                print(f"Error plotting comparison data: {e}")
+
         CCDplot.canvas.draw()
 
     def toggle_spectrum_colors(self):
@@ -918,9 +973,9 @@ class BuildPanel(ttk.Frame):
         self.color_window.title("Plot Colour Settings")
         self.color_window.resizable(False, False)
         
-        # Set window size and center it on screen
-        window_width = 350
-        window_height = 200
+        # Set window size and center it on screen (adjusted for compare data section)
+        window_width = 450
+        window_height = 520
         screen_width = self.color_window.winfo_screenwidth()
         screen_height = self.color_window.winfo_screenheight()
         x = (screen_width - window_width) // 2
@@ -964,20 +1019,153 @@ class BuildPanel(ttk.Frame):
             command=lambda: self.choose_plot_color("regression", self.color_window)
         ).pack(side=tk.LEFT, padx=5)
         
+        # Separator
+        ttk.Separator(self.color_window, orient="horizontal").pack(fill="x", pady=15)
+        
+        # Compare data section
+        ttk.Label(self.color_window, text="Compare Data:", font=("Avenir", 10, "bold")).pack(pady=(5, 5))
+        
+        compare_frame = ttk.Frame(self.color_window)
+        compare_frame.pack(pady=5)
+        
+        # Compare data button
+        ttk.Button(
+            compare_frame,
+            text="Load Data File",
+            style="Accent.TButton",
+            command=self.load_comparison_data
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Frame for filename display and remove button (dynamically shown)
+        self.compare_info_frame = ttk.Frame(self.color_window)
+        self.compare_info_frame.pack(pady=5)
+        
+        # Comparison color section (only shown when data is loaded)
+        self.compare_color_section = ttk.Frame(self.color_window)
+        
+        # Update the display to show current comparison state
+        self.update_compare_display()
+        
         # Apply button
         ttk.Button(
             self.color_window,
             text="Apply & Close",
             style="Accent.TButton",
             command=lambda: self.close_color_window()
-        ).pack(pady=20)
+        ).pack(pady=15)
+
+    def load_comparison_data(self):
+        """Load a .dat file for comparison"""
+        from tkinter import filedialog
+        import os
+        
+        filename = filedialog.askopenfilename(
+            title="Select comparison data file",
+            filetypes=[("Data files", "*.dat"), ("All files", "*.*")]
+        )
+        
+        if filename:
+            try:
+                # Load the data using numpy
+                data = np.loadtxt(filename)
+                self.comparison_data = data
+                self.comparison_filename = os.path.basename(filename)
+                
+                # Update the display
+                self.update_compare_display()
+                
+                # Update the plot
+                self.updateplot(self.CCDplot)
+            except Exception as e:
+                print(f"Error loading comparison data: {e}")
+    
+    def remove_comparison_data(self):
+        """Remove the comparison data from the plot"""
+        self.comparison_data = None
+        self.comparison_filename = None
+        
+        # Update the display
+        self.update_compare_display()
+        
+        # Update the plot
+        self.updateplot(self.CCDplot)
+    
+    def update_compare_display(self):
+        """Update the comparison data display in the color window"""
+        if not hasattr(self, 'color_window') or not self.color_window or not self.color_window.winfo_exists():
+            return
+        
+        # Clear existing widgets in compare info frame
+        for widget in self.compare_info_frame.winfo_children():
+            widget.destroy()
+        
+        # Clear existing widgets in compare color section
+        for widget in self.compare_color_section.winfo_children():
+            widget.destroy()
+        
+        if self.comparison_data is not None:
+            # Show filename and remove button
+            filename_label = ttk.Label(
+                self.compare_info_frame,
+                text=self.comparison_filename,
+                font=("Avenir", 9)
+            )
+            filename_label.pack(side=tk.LEFT, padx=5)
+            
+            remove_btn = ttk.Button(
+                self.compare_info_frame,
+                text="✕",
+                width=3,
+                command=self.remove_comparison_data
+            )
+            remove_btn.pack(side=tk.LEFT, padx=2)
+            
+            # Show comparison color picker
+            self.compare_color_section.pack(pady=5)
+            
+            ttk.Label(
+                self.compare_color_section,
+                text="Comparison Data Colour:",
+                font=("Avenir", 10, "bold")
+            ).pack(pady=(10, 5))
+            
+            compare_color_frame = ttk.Frame(self.compare_color_section)
+            compare_color_frame.pack(pady=5)
+            
+            # Color preview for comparison
+            self.compare_color_preview = tk.Canvas(
+                compare_color_frame,
+                width=40,
+                height=40,
+                bg=self.compare_color,
+                relief="solid",
+                borderwidth=1
+            )
+            self.compare_color_preview.pack(side=tk.LEFT, padx=(10, 5))
+            
+            ttk.Button(
+                compare_color_frame,
+                text="Choose Colour",
+                style="Accent.TButton",
+                command=lambda: self.choose_plot_color("compare", self.color_window)
+            ).pack(side=tk.LEFT, padx=5)
+            
+            # Force window to update its layout
+            self.color_window.update_idletasks()
+        else:
+            # Hide the comparison color section if no data
+            self.compare_color_section.pack_forget()
+            # Force window to update its layout
+            self.color_window.update_idletasks()
 
     def choose_plot_color(self, plot_type, window):
         """Open color chooser dialog and update preview"""
         if plot_type == "main":
             current_color = self.main_plot_color
-        else:
+        elif plot_type == "regression":
             current_color = self.regression_color
+        else:  # compare
+            current_color = self.compare_color
             
         color = colorchooser.askcolor(color=current_color, title=f"Choose {plot_type} color")
         
@@ -985,9 +1173,12 @@ class BuildPanel(ttk.Frame):
             if plot_type == "main":
                 self.main_plot_color = color[1]
                 self.main_color_preview.config(bg=self.main_plot_color)
-            else:
+            elif plot_type == "regression":
                 self.regression_color = color[1]
                 self.regression_color_preview.config(bg=self.regression_color)
+            else:  # compare
+                self.compare_color = color[1]
+                self.compare_color_preview.config(bg=self.compare_color)
             
             # Immediately update the plot with new color
             self.updateplot(self.CCDplot)
