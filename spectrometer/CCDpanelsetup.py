@@ -648,8 +648,7 @@ class BuildPanel(ttk.Frame):
                     if compare_x.max() < 4000:  # Likely pixel numbers
                         compare_x = default_calibration.apply(compare_x.astype(int))
                 
-                CCDplot.a.plot(compare_x, compare_y, color=self.compare_color, lw=1.0, alpha=0.8, label=self.comparison_filename)
-                CCDplot.a.legend(loc='best', fontsize=8)
+                CCDplot.a.plot(compare_x, compare_y, color=self.compare_color, lw=1.0, alpha=0.8)
             except Exception as e:
                 print(f"Error plotting comparison data: {e}")
 
@@ -893,9 +892,13 @@ class BuildPanel(ttk.Frame):
                     image=icon_photo,
                     bg="#ffc200",  # Match Accent button color
                     bd=0,
+                    cursor="hand2",  # Show hand cursor to indicate it's clickable
                 )
                 self.icon_overlay.image = icon_photo
                 self.icon_overlay.place(relx=0.5, rely=0.5, anchor="center")
+                
+                # Make the overlay pass click events to the button underneath
+                self.icon_overlay.bind("<Button-1>", lambda e: self.open_color_picker())
         except Exception as e:
             print(f"Could not create icon overlay: {e}")
 

@@ -30,6 +30,10 @@ class BuildPlot(ttk.Frame):
 
         toolbarFrame = ttk.Frame(master=self)
         toolbarFrame.grid(row=1, column=0, sticky="ew")
+        
+        # Customize toolbar to remove first 3 buttons (Home, Back, Forward)
+        NavigationToolbar2Tk.toolitems = [t for t in NavigationToolbar2Tk.toolitems if t[0] not in ('Home', 'Back', 'Forward')]
+        
         self.navigation_toolbar = NavigationToolbar2Tk(self.canvas, toolbarFrame)
 
         # Override toolbar colors to force light mode
