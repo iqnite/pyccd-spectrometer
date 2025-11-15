@@ -25,7 +25,7 @@
 # SUCH DAMAGE.
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, colorchooser
 import numpy as np
 import serial
 import math
@@ -54,6 +54,10 @@ class BuildPanel(ttk.Frame):
 
         # Store CCDplot reference for callbacks
         self.CCDplot = CCDplot
+        
+        # Initialize plot colors
+        self.main_plot_color = "#1f77b4"  # Default matplotlib blue
+        self.regression_color = "#d62728"  # Default red
 
         # Create all widgets and space between them
         self.header_fields()
@@ -528,7 +532,7 @@ class BuildPanel(ttk.Frame):
                 pass
 
             # Plot raw/intensity data directly
-            CCDplot.a.plot(x_values, data, alpha=alpha)
+            CCDplot.a.plot(x_values, data, alpha=alpha, color=self.main_plot_color)
             CCDplot.a.set_ylabel("Intensity")
             CCDplot.a.set_xlabel(x_label)
             # Set Y-axis range for intensity plot
@@ -548,7 +552,7 @@ class BuildPanel(ttk.Frame):
                 pass
 
             # Plot raw data directly
-            CCDplot.a.plot(x_values, data, alpha=alpha)
+            CCDplot.a.plot(x_values, data, alpha=alpha, color=self.main_plot_color)
             CCDplot.a.set_ylabel("ADCcount")
             CCDplot.a.set_xlabel(x_label)
             # Set Y-axis range for raw data plot
@@ -589,7 +593,7 @@ class BuildPanel(ttk.Frame):
                     xs_plot = xs_pix
 
                 # Plot interpolated curve as a distinct coloured line
-                CCDplot.a.plot(xs_plot, ys_interp, color="red", lw=0.9, alpha=0.9, label="interpolated")
+                CCDplot.a.plot(xs_plot, ys_interp, color=self.regression_color, lw=0.9, alpha=0.9, label="interpolated")
         except Exception:
             # don't let regression failures break the plotting
             pass
@@ -669,9 +673,9 @@ class BuildPanel(ttk.Frame):
         self.bstop.pack(side=tk.RIGHT, padx=5, pady=5, anchor="e")
         # progressbar
         self.progress = ttk.Progressbar(
-            self, variable=progress_var, maximum=10, length=200
+            self, variable=progress_var, maximum=10, length=200,
         )
-        self.progress.grid(row=collect_row + 2, columnspan=2, sticky="EW", padx=5)
+        self.progress.grid(row=collect_row + 2, columnspan=2, sticky="EW", padx=(45, 5))
 
     def plotmodefields(self, plotmode_row, CCDplot):
         # plot mode - variables, widgets and traces associated with the plot mode
@@ -785,6 +789,61 @@ class BuildPanel(ttk.Frame):
             side=tk.LEFT, padx=(5, 0), pady=5
         )  # Add some padding to separate from save button
 
+        # Add an icon button to the right of Calibration - opens color picker
+        # Create empty button first to match other button sizes
+        self.b_icon = ttk.Button(
+            self.fileframe,
+            text="",
+            style="Accent.TButton",
+            width=3,
+            command=self.open_color_picker,
+        )
+        self.b_icon.pack(side=tk.LEFT, padx=(5, 0), pady=5)
+
+        # Now overlay the icon image on top of the button
+        try:
+            from PIL import Image, ImageTk
+            import os
+
+            # Prefer a small palette icon if present, fallback to astrolens
+            base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+            preferred = os.path.join(base_dir, "palette.png")
+            fallback = os.path.join(base_dir, "astrolens.png")
+            icon_path = preferred if os.path.exists(preferred) else fallback
+
+            if os.path.exists(icon_path):
+                icon_image = Image.open(icon_path).convert("RGBA")
+
+                # Make the icon solid black while preserving transparency
+                try:
+                    alpha = icon_image.getchannel("A")
+                except Exception:
+                    alpha = icon_image.convert("L")
+                black_img = Image.new("RGBA", icon_image.size, (0, 0, 0, 255))
+                icon_solid = Image.new("RGBA", icon_image.size, (0, 0, 0, 0))
+                icon_solid.paste(black_img, (0, 0), mask=alpha)
+
+                # Resize icon to reasonable size
+                target_size = (16, 16)
+                try:
+                    resample = Image.Resampling.LANCZOS
+                except Exception:
+                    resample = Image.LANCZOS
+                icon_image = icon_solid.resize(target_size, resample)
+                icon_photo = ImageTk.PhotoImage(icon_image)
+
+                # Place label with icon on top of the button
+                self.icon_overlay = tk.Label(
+                    self.b_icon,
+                    image=icon_photo,
+                    bg="#ffc200",  # Match Accent button color
+                    bd=0,
+                )
+                self.icon_overlay.image = icon_photo
+                self.icon_overlay.place(relx=0.5, rely=0.5, anchor="center")
+        except Exception as e:
+            print(f"Could not create icon overlay: {e}")
+
         # Add a little vertical spacing before the placeholder controls
         self.grid_rowconfigure(save_row + 1, minsize=12)
 
@@ -846,6 +905,92 @@ class BuildPanel(ttk.Frame):
         default_calibration.open_calibration_window(
             self.master, on_apply_callback=self.CCDplot.replot_current_spectrum
         )
+
+    def open_color_picker(self):
+        """Open color picker window for plot customization"""
+        # Check if color picker window already exists and is open
+        if hasattr(self, 'color_window') and self.color_window and self.color_window.winfo_exists():
+            self.color_window.lift()  # Bring existing window to front
+            return
+            
+        # Create a new top-level window
+        self.color_window = tk.Toplevel(self.master)
+        self.color_window.title("Plot Color Settings")
+        self.color_window.geometry("350x200")
+        self.color_window.resizable(False, False)
+        
+        # Clean up reference when window is closed
+        self.color_window.protocol("WM_DELETE_WINDOW", lambda: self.close_color_window())
+        
+        # Main plot color section
+        ttk.Label(self.color_window, text="Main Plot Color:", font=("Arial", 10, "bold")).pack(pady=(20, 5))
+        
+        main_color_frame = ttk.Frame(self.color_window)
+        main_color_frame.pack(pady=5)
+        
+        # Color preview for main plot
+        self.main_color_preview = tk.Canvas(main_color_frame, width=40, height=40, bg=self.main_plot_color, relief="solid", borderwidth=1)
+        self.main_color_preview.pack(side=tk.LEFT, padx=(10, 5))
+        
+        ttk.Button(
+            main_color_frame,
+            text="Choose Color",
+            style="Accent.TButton",
+            command=lambda: self.choose_plot_color("main", self.color_window)
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Regression plot color section
+        ttk.Label(self.color_window, text="Regression Line Color:", font=("Arial", 10, "bold")).pack(pady=(20, 5))
+        
+        regression_color_frame = ttk.Frame(self.color_window)
+        regression_color_frame.pack(pady=5)
+        
+        # Color preview for regression
+        self.regression_color_preview = tk.Canvas(regression_color_frame, width=40, height=40, bg=self.regression_color, relief="solid", borderwidth=1)
+        self.regression_color_preview.pack(side=tk.LEFT, padx=(10, 5))
+        
+        ttk.Button(
+            regression_color_frame,
+            text="Choose Color",
+            style="Accent.TButton",
+            command=lambda: self.choose_plot_color("regression", self.color_window)
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Apply button
+        ttk.Button(
+            self.color_window,
+            text="Apply & Close",
+            style="Accent.TButton",
+            command=lambda: self.close_color_window()
+        ).pack(pady=20)
+
+    def choose_plot_color(self, plot_type, window):
+        """Open color chooser dialog and update preview"""
+        if plot_type == "main":
+            current_color = self.main_plot_color
+        else:
+            current_color = self.regression_color
+            
+        color = colorchooser.askcolor(color=current_color, title=f"Choose {plot_type} color")
+        
+        if color[1]:  # If user didn't cancel
+            if plot_type == "main":
+                self.main_plot_color = color[1]
+                self.main_color_preview.config(bg=self.main_plot_color)
+            else:
+                self.regression_color = color[1]
+                self.regression_color_preview.config(bg=self.regression_color)
+            
+            # Immediately update the plot with new color
+            self.updateplot(self.CCDplot)
+            # Close the window after color selection
+            self.close_color_window()
+
+    def close_color_window(self):
+        """Close the color picker window and clean up reference"""
+        if hasattr(self, 'color_window') and self.color_window and self.color_window.winfo_exists():
+            self.color_window.destroy()
+        self.color_window = None
 
     def updateplotfields(self, update_row, CCDplot):
         self.bupdate = ttk.Button(
