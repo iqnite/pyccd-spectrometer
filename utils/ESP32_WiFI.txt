@@ -1,0 +1,41 @@
+#include <WiFi.h>
+
+const char* ssid     = "AstroLens";
+const char* password = "AstroLens";
+
+WiFiServer server(5000);
+
+void setup() {
+  Serial.begin(115200);   // UART -> STM32 (match STM32 baudrate)
+
+  // Start Wi-Fi Access Point
+  WiFi.softAP(ssid, password);
+  Serial.println("WiFi AP started");
+  Serial.println(WiFi.softAPIP());
+
+  server.begin();   // Start TCP server
+}
+
+void loop() {
+  WiFiClient client = server.available();
+
+  if (client) {
+    Serial.println("Client connected");
+
+    while (client.connected()) {
+
+      // PC → ESP32 → STM32
+      if (client.available()) {
+        Serial.write(client.read());
+      }
+
+      // STM32 → ESP32 → PC
+      if (Serial.available()) {
+        client.write(Serial.read());
+      }
+    }
+
+    client.stop();
+    Serial.println("Client disconnected");
+  }
+}
