@@ -54,12 +54,12 @@ class BuildPanel(ttk.Frame):
 
         # Store CCDplot reference for callbacks
         self.CCDplot = CCDplot
-        
+
         # Initialize plot colors
         self.main_plot_color = "#1f77b4"  # Default matplotlib blue
         self.regression_color = "#d62728"  # Default red
         self.compare_color = "#2ca02c"  # Default green for comparison data
-        
+
         # Initialize comparison data storage
         self.comparison_data = None
         self.comparison_filename = None
@@ -189,7 +189,7 @@ class BuildPanel(ttk.Frame):
         self.device_status = tk.StringVar()
         self.device_statuscolor = tk.StringVar()
         # widgets
-        self.ldevice = ttk.Label(self, text="COM-device:")
+        self.ldevice = ttk.Label(self, text="COM port (RX/TX):")
         self.ldevice.grid(column=0, row=device_row, sticky="e")
         self.edevice = ttk.Entry(self, textvariable=self.device_address, justify="left")
         self.edevice.grid(column=1, row=device_row, sticky="w", padx=5)
@@ -205,9 +205,33 @@ class BuildPanel(ttk.Frame):
         )
         self.device_address.set(config.port)
         self.ldevicestatus.grid(column=1, row=device_row + 1, sticky="w", padx=5)
+
+        # TX port field (optional - if empty, uses same as RX)
+        self.device_address_tx = tk.StringVar()
+        self.device_status_tx = tk.StringVar()
+        self.ldevice_tx = ttk.Label(self, text="COM port (TX):")
+        self.ldevice_tx.grid(column=0, row=device_row + 2, sticky="e")
+        self.edevice_tx = ttk.Entry(
+            self, textvariable=self.device_address_tx, justify="left"
+        )
+        self.edevice_tx.grid(column=1, row=device_row + 2, sticky="w", padx=5)
+        self.ldevicestatus_tx = tk.Label(
+            self, textvariable=self.device_status_tx, fg="#ffffff"
+        )
+        # setup trace to check if the TX device exists
+        self.device_address_tx.trace_add(
+            "write",
+            lambda name, index, mode, Device=self.device_address_tx, status=self.device_status_tx, colr=self.ldevicestatus_tx: self.DEVcallback_tx(
+                name, index, mode, Device, status, colr
+            ),
+        )
+        if config.port_tx:
+            self.device_address_tx.set(config.port_tx)
+        self.ldevicestatus_tx.grid(column=1, row=device_row + 3, sticky="w", padx=5)
+
         # firmware selection
         self.lfirmware = ttk.Label(self, text="Firmware:")
-        self.lfirmware.grid(column=0, row=device_row + 2, sticky="e", pady=5)
+        self.lfirmware.grid(column=0, row=device_row + 4, sticky="e", pady=5)
         self.firmware_type = tk.StringVar(value="STM32F40x")
         self.firmware_dropdown = ttk.Combobox(
             self,
@@ -215,7 +239,17 @@ class BuildPanel(ttk.Frame):
             values=["STM32F40x", "STM32F103"],
             state="readonly",
         )
-        self.firmware_dropdown.grid(column=1, row=device_row + 2, padx=5, sticky="w")
+        # firmware selection
+        self.lfirmware = ttk.Label(self, text="Firmware:")
+        self.lfirmware.grid(column=0, row=device_row + 4, sticky="e", pady=5)
+        self.firmware_type = tk.StringVar(value="STM32F40x")
+        self.firmware_dropdown = ttk.Combobox(
+            self,
+            textvariable=self.firmware_type,
+            values=["STM32F40x", "STM32F103"],
+            state="readonly",
+        )
+        self.firmware_dropdown.grid(column=1, row=device_row + 4, padx=5, sticky="w")
         self.firmware_type.trace_add("write", self.update_firmware)
 
     def update_firmware(self, *args):
@@ -467,11 +501,45 @@ class BuildPanel(ttk.Frame):
             # Normal COM port checking
             try:
                 ser = serial.Serial(config.port, config.baudrate, timeout=1)
-                status.set("Device exist")
+                status.set("Device found")
                 ser.close()
                 colr.configure(fg="#ffffff")
             except serial.SerialException:
-                status.set("Device doesn't exist")
+                status.set("Device not found")
+                colr.configure(fg="#ffc200")
+
+    def DEVcallback_tx(self, name, index, mode, Device, status, colr):
+        tx_port = Device.get().strip()
+
+        # If TX port is empty, use same as RX port
+        if not tx_port:
+            config.port_tx = None
+            status.set("Using RX port")
+            colr.configure(fg="#888888")
+            return
+
+        config.port_tx = tx_port
+
+        # Check if it's a simulation port
+        if config.port_tx in ["SIMULATION", "SIM", "TEST"]:
+            status.set("Simulation mode active")
+            colr.configure(fg="blue")
+            # Set a special port name that our bridge will recognize
+            config.port_tx = "socket://localhost:9999"
+
+        elif config.port_tx.startswith(("socket://", "tcp://")):
+            status.set("Socket connection")
+            colr.configure(fg="blue")
+
+        else:
+            # Normal COM port checking
+            try:
+                ser = serial.Serial(config.port_tx, config.baudrate, timeout=1)
+                status.set("Device found")
+                ser.close()
+                colr.configure(fg="#ffffff")
+            except serial.SerialException:
+                status.set("Device not found")
                 colr.configure(fg="#ffc200")
 
     def updateplot(self, CCDplot):
@@ -498,7 +566,11 @@ class BuildPanel(ttk.Frame):
 
         # Capture current x-limits early so we can restore user zoom after redraw
         try:
-            prev_xlim = tuple(self.CCDplot.a.get_xlim()) if hasattr(self.CCDplot, "a") and self.CCDplot.a is not None else None
+            prev_xlim = (
+                tuple(self.CCDplot.a.get_xlim())
+                if hasattr(self.CCDplot, "a") and self.CCDplot.a is not None
+                else None
+            )
         except Exception:
             prev_xlim = None
 
@@ -519,7 +591,7 @@ class BuildPanel(ttk.Frame):
             x_values = np.arange(3694)
             x_label = "Pixelnumber"
 
-    # Axis limits will be restored later (preserve user zoom) — do not set them here
+        # Axis limits will be restored later (preserve user zoom) — do not set them here
 
         # plot intensities
         if config.datainvert == 1:
@@ -568,7 +640,10 @@ class BuildPanel(ttk.Frame):
 
         # If regression toggle is active, compute and plot interpolated curve
         try:
-            if getattr(self, "ph_checkbox_var", None) and self.ph_checkbox_var.get() == 1:
+            if (
+                getattr(self, "ph_checkbox_var", None)
+                and self.ph_checkbox_var.get() == 1
+            ):
                 # Use the same data that was plotted (data variable)
                 n = data.size
                 pixels = np.arange(n)
@@ -583,7 +658,9 @@ class BuildPanel(ttk.Frame):
                 # a noticeable effect: divisor 1000 gives range 0.0..0.1
                 smooth = max(0.0, float(sval) / 1000.0)
 
-                interp_fn, interp_kind = plotgraph.make_interpolator(pixels, intensities, method="spline", smooth=smooth)
+                interp_fn, interp_kind = plotgraph.make_interpolator(
+                    pixels, intensities, method="spline", smooth=smooth
+                )
                 xs_pix = np.linspace(pixels.min(), pixels.max(), 2000)
                 try:
                     ys_interp = interp_fn(xs_pix)
@@ -592,13 +669,24 @@ class BuildPanel(ttk.Frame):
                     ys_interp = np.interp(xs_pix, pixels, intensities)
 
                 # Map pixel x-coordinates to plot x-coordinates (pixels or calibrated wavelengths)
-                if config.spectroscopy_mode and hasattr(default_calibration, "apply") and callable(default_calibration.apply):
+                if (
+                    config.spectroscopy_mode
+                    and hasattr(default_calibration, "apply")
+                    and callable(default_calibration.apply)
+                ):
                     xs_plot = default_calibration.apply(xs_pix.astype(int))
                 else:
                     xs_plot = xs_pix
 
                 # Plot interpolated curve as a distinct coloured line
-                CCDplot.a.plot(xs_plot, ys_interp, color=self.regression_color, lw=0.9, alpha=0.9, label="interpolated")
+                CCDplot.a.plot(
+                    xs_plot,
+                    ys_interp,
+                    color=self.regression_color,
+                    lw=0.9,
+                    alpha=0.9,
+                    label="interpolated",
+                )
         except Exception:
             # don't let regression failures break the plotting
             pass
@@ -608,14 +696,17 @@ class BuildPanel(ttk.Frame):
             try:
                 # Assume comparison data is in the same format as main data
                 # If it's a 2D array with x and y columns, use both
-                if self.comparison_data.ndim == 2 and self.comparison_data.shape[1] >= 2:
+                if (
+                    self.comparison_data.ndim == 2
+                    and self.comparison_data.shape[1] >= 2
+                ):
                     compare_x = self.comparison_data[:, 0]
                     compare_y = self.comparison_data[:, 1]
                 else:
                     # If it's 1D, use pixel numbers as x
                     compare_y = self.comparison_data.copy()
                     compare_x = np.arange(len(compare_y))
-                
+
                 # Apply inversion if enabled (same as main data)
                 # For comparison data, inversion means inverting the y-values around their max
                 try:
@@ -625,7 +716,7 @@ class BuildPanel(ttk.Frame):
                         compare_y = max_val - compare_y + np.min(compare_y)
                 except Exception as e:
                     print(f"Error inverting comparison data: {e}")
-                
+
                 # Apply mirroring if enabled (same as main data)
                 try:
                     if getattr(config, "datamirror", 0) == 1:
@@ -634,21 +725,27 @@ class BuildPanel(ttk.Frame):
                             compare_x = compare_x[::-1]
                 except Exception as e:
                     print(f"Error mirroring comparison data: {e}")
-                
+
                 # Normalize comparison data so the minimum is at y=0 (baseline at zero intensity)
                 try:
                     min_val = np.min(compare_y)
                     compare_y = compare_y - min_val
                 except Exception as e:
                     print(f"Error normalizing comparison data: {e}")
-                
+
                 # Apply calibration to x-axis if in spectroscopy mode
-                if config.spectroscopy_mode and hasattr(default_calibration, "apply") and callable(default_calibration.apply):
+                if (
+                    config.spectroscopy_mode
+                    and hasattr(default_calibration, "apply")
+                    and callable(default_calibration.apply)
+                ):
                     # If compare_x is already wavelengths, use as-is; otherwise convert from pixels
                     if compare_x.max() < 4000:  # Likely pixel numbers
                         compare_x = default_calibration.apply(compare_x.astype(int))
-                
-                CCDplot.a.plot(compare_x, compare_y, color=self.compare_color, lw=1.0, alpha=0.8)
+
+                CCDplot.a.plot(
+                    compare_x, compare_y, color=self.compare_color, lw=1.0, alpha=0.8
+                )
             except Exception as e:
                 print(f"Error plotting comparison data: {e}")
 
@@ -727,7 +824,10 @@ class BuildPanel(ttk.Frame):
         self.bstop.pack(side=tk.RIGHT, padx=5, pady=5, anchor="e")
         # progressbar
         self.progress = ttk.Progressbar(
-            self, variable=progress_var, maximum=10, length=200,
+            self,
+            variable=progress_var,
+            maximum=10,
+            length=200,
         )
         self.progress.grid(row=collect_row + 2, columnspan=2, sticky="EW", padx=(45, 5))
 
@@ -849,7 +949,9 @@ class BuildPanel(ttk.Frame):
             import os
 
             # Prefer a small palette icon if present, fallback to astrolens
-            base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+            base_dir = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "assets"
+            )
             preferred = os.path.join(base_dir, "palette.png")
             fallback = os.path.join(base_dir, "astrolens.png")
             icon_path = preferred if os.path.exists(preferred) else fallback
@@ -885,7 +987,7 @@ class BuildPanel(ttk.Frame):
                 )
                 self.icon_overlay.image = icon_photo
                 self.icon_overlay.place(relx=0.5, rely=0.5, anchor="center")
-                
+
                 # Make the overlay pass click events to the button underneath
                 self.icon_overlay.bind("<Button-1>", lambda e: self.open_color_picker())
         except Exception as e:
@@ -909,7 +1011,10 @@ class BuildPanel(ttk.Frame):
         # Also trigger a plot update so the regression overlay appears immediately
         self.ph_checkbox_var.trace_add(
             "write",
-            lambda *args, CCDplot=CCDplot: (self._ph_check_changed(), self.updateplot(CCDplot)),
+            lambda *args, CCDplot=CCDplot: (
+                self._ph_check_changed(),
+                self.updateplot(CCDplot),
+            ),
         )
 
         # Placeholder slider similar to Averages
@@ -956,15 +1061,19 @@ class BuildPanel(ttk.Frame):
     def open_color_picker(self):
         """Open color picker window for plot customization"""
         # Check if color picker window already exists and is open
-        if hasattr(self, 'color_window') and self.color_window and self.color_window.winfo_exists():
+        if (
+            hasattr(self, "color_window")
+            and self.color_window
+            and self.color_window.winfo_exists()
+        ):
             self.color_window.lift()  # Bring existing window to front
             return
-            
+
         # Create a new top-level window
         self.color_window = tk.Toplevel(self.master)
         self.color_window.title("Plot Colour Settings")
         self.color_window.resizable(False, False)
-        
+
         # Set window size and center it on screen (adjusted for compare data section)
         window_width = 450
         window_height = 520
@@ -973,157 +1082,185 @@ class BuildPanel(ttk.Frame):
         x = (screen_width - window_width) // 2
         y = (screen_height - window_height) // 2
         self.color_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
-        
+
         # Clean up reference when window is closed
-        self.color_window.protocol("WM_DELETE_WINDOW", lambda: self.close_color_window())
-        
+        self.color_window.protocol(
+            "WM_DELETE_WINDOW", lambda: self.close_color_window()
+        )
+
         # Main plot color section
-        ttk.Label(self.color_window, text="Main Plot Colour:", font=("Avenir", 10, "bold")).pack(pady=(20, 5))
-        
+        ttk.Label(
+            self.color_window, text="Main Plot Colour:", font=("Avenir", 10, "bold")
+        ).pack(pady=(20, 5))
+
         main_color_frame = ttk.Frame(self.color_window)
         main_color_frame.pack(pady=5)
-        
+
         # Color preview for main plot
-        self.main_color_preview = tk.Canvas(main_color_frame, width=40, height=40, bg=self.main_plot_color, relief="solid", borderwidth=1)
+        self.main_color_preview = tk.Canvas(
+            main_color_frame,
+            width=40,
+            height=40,
+            bg=self.main_plot_color,
+            relief="solid",
+            borderwidth=1,
+        )
         self.main_color_preview.pack(side=tk.LEFT, padx=(10, 5))
-        
+
         ttk.Button(
             main_color_frame,
             text="Choose Colour",
             style="Accent.TButton",
-            command=lambda: self.choose_plot_color("main", self.color_window)
+            command=lambda: self.choose_plot_color("main", self.color_window),
         ).pack(side=tk.LEFT, padx=5)
-        
+
         # Regression plot color section
-        ttk.Label(self.color_window, text="Regression Line Colour:", font=("Avenir", 10, "bold")).pack(pady=(20, 5))
-        
+        ttk.Label(
+            self.color_window,
+            text="Regression Line Colour:",
+            font=("Avenir", 10, "bold"),
+        ).pack(pady=(20, 5))
+
         regression_color_frame = ttk.Frame(self.color_window)
         regression_color_frame.pack(pady=5)
-        
+
         # Color preview for regression
-        self.regression_color_preview = tk.Canvas(regression_color_frame, width=40, height=40, bg=self.regression_color, relief="solid", borderwidth=1)
+        self.regression_color_preview = tk.Canvas(
+            regression_color_frame,
+            width=40,
+            height=40,
+            bg=self.regression_color,
+            relief="solid",
+            borderwidth=1,
+        )
         self.regression_color_preview.pack(side=tk.LEFT, padx=(10, 5))
-        
+
         ttk.Button(
             regression_color_frame,
             text="Choose Colour",
             style="Accent.TButton",
-            command=lambda: self.choose_plot_color("regression", self.color_window)
+            command=lambda: self.choose_plot_color("regression", self.color_window),
         ).pack(side=tk.LEFT, padx=5)
-        
+
         # Separator
         ttk.Separator(self.color_window, orient="horizontal").pack(fill="x", pady=15)
-        
+
         # Compare data section
-        ttk.Label(self.color_window, text="Compare Data:", font=("Avenir", 10, "bold")).pack(pady=(5, 5))
-        
+        ttk.Label(
+            self.color_window, text="Compare Data:", font=("Avenir", 10, "bold")
+        ).pack(pady=(5, 5))
+
         compare_frame = ttk.Frame(self.color_window)
         compare_frame.pack(pady=5)
-        
+
         # Compare data button
         ttk.Button(
             compare_frame,
             text="Load Data File",
             style="Accent.TButton",
-            command=self.load_comparison_data
+            command=self.load_comparison_data,
         ).pack(side=tk.LEFT, padx=5)
-        
+
         # Frame for filename display and remove button (dynamically shown)
         self.compare_info_frame = ttk.Frame(self.color_window)
         self.compare_info_frame.pack(pady=5)
-        
+
         # Comparison color section (only shown when data is loaded)
         self.compare_color_section = ttk.Frame(self.color_window)
-        
+
         # Update the display to show current comparison state
         self.update_compare_display()
-        
+
         # Apply button
         ttk.Button(
             self.color_window,
             text="Apply & Close",
             style="Accent.TButton",
-            command=lambda: self.close_color_window()
+            command=lambda: self.close_color_window(),
         ).pack(pady=15)
 
     def load_comparison_data(self):
         """Load a .dat file for comparison"""
         from tkinter import filedialog
         import os
-        
+
         filename = filedialog.askopenfilename(
             title="Select comparison data file",
-            filetypes=[("Data files", "*.dat"), ("All files", "*.*")]
+            filetypes=[("Data files", "*.dat"), ("All files", "*.*")],
         )
-        
+
         if filename:
             try:
                 # Load the data using numpy
                 data = np.loadtxt(filename)
                 self.comparison_data = data
                 self.comparison_filename = os.path.basename(filename)
-                
+
                 # Update the display
                 self.update_compare_display()
-                
+
                 # Update the plot
                 self.updateplot(self.CCDplot)
             except Exception as e:
                 print(f"Error loading comparison data: {e}")
-    
+
     def remove_comparison_data(self):
         """Remove the comparison data from the plot"""
         self.comparison_data = None
         self.comparison_filename = None
-        
+
         # Update the display
         self.update_compare_display()
-        
+
         # Update the plot
         self.updateplot(self.CCDplot)
-    
+
     def update_compare_display(self):
         """Update the comparison data display in the color window"""
-        if not hasattr(self, 'color_window') or not self.color_window or not self.color_window.winfo_exists():
+        if (
+            not hasattr(self, "color_window")
+            or not self.color_window
+            or not self.color_window.winfo_exists()
+        ):
             return
-        
+
         # Clear existing widgets in compare info frame
         for widget in self.compare_info_frame.winfo_children():
             widget.destroy()
-        
+
         # Clear existing widgets in compare color section
         for widget in self.compare_color_section.winfo_children():
             widget.destroy()
-        
+
         if self.comparison_data is not None:
             # Show filename and remove button
             filename_label = ttk.Label(
                 self.compare_info_frame,
                 text=self.comparison_filename,
-                font=("Avenir", 9)
+                font=("Avenir", 9),
             )
             filename_label.pack(side=tk.LEFT, padx=5)
-            
+
             remove_btn = ttk.Button(
                 self.compare_info_frame,
                 text="✕",
                 width=3,
-                command=self.remove_comparison_data
+                command=self.remove_comparison_data,
             )
             remove_btn.pack(side=tk.LEFT, padx=2)
-            
+
             # Show comparison color picker
             self.compare_color_section.pack(pady=5)
-            
+
             ttk.Label(
                 self.compare_color_section,
                 text="Comparison Data Colour:",
-                font=("Avenir", 10, "bold")
+                font=("Avenir", 10, "bold"),
             ).pack(pady=(10, 5))
-            
+
             compare_color_frame = ttk.Frame(self.compare_color_section)
             compare_color_frame.pack(pady=5)
-            
+
             # Color preview for comparison
             self.compare_color_preview = tk.Canvas(
                 compare_color_frame,
@@ -1131,17 +1268,17 @@ class BuildPanel(ttk.Frame):
                 height=40,
                 bg=self.compare_color,
                 relief="solid",
-                borderwidth=1
+                borderwidth=1,
             )
             self.compare_color_preview.pack(side=tk.LEFT, padx=(10, 5))
-            
+
             ttk.Button(
                 compare_color_frame,
                 text="Choose Colour",
                 style="Accent.TButton",
-                command=lambda: self.choose_plot_color("compare", self.color_window)
+                command=lambda: self.choose_plot_color("compare", self.color_window),
             ).pack(side=tk.LEFT, padx=5)
-            
+
             # Force window to update its layout
             self.color_window.update_idletasks()
         else:
@@ -1158,9 +1295,11 @@ class BuildPanel(ttk.Frame):
             current_color = self.regression_color
         else:  # compare
             current_color = self.compare_color
-            
-        color = colorchooser.askcolor(color=current_color, title=f"Choose {plot_type} color")
-        
+
+        color = colorchooser.askcolor(
+            color=current_color, title=f"Choose {plot_type} color"
+        )
+
         if color[1]:  # If user didn't cancel
             if plot_type == "main":
                 self.main_plot_color = color[1]
@@ -1171,7 +1310,7 @@ class BuildPanel(ttk.Frame):
             else:  # compare
                 self.compare_color = color[1]
                 self.compare_color_preview.config(bg=self.compare_color)
-            
+
             # Immediately update the plot with new color
             self.updateplot(self.CCDplot)
             # Close the window after color selection
@@ -1179,18 +1318,22 @@ class BuildPanel(ttk.Frame):
 
     def close_color_window(self):
         """Close the color picker window and clean up reference"""
-        if hasattr(self, 'color_window') and self.color_window and self.color_window.winfo_exists():
+        if (
+            hasattr(self, "color_window")
+            and self.color_window
+            and self.color_window.winfo_exists()
+        ):
             self.color_window.destroy()
         self.color_window = None
 
     def zoom_mode(self):
         """Activate zoom mode on the plot"""
-        if hasattr(self.CCDplot, 'navigation_toolbar'):
+        if hasattr(self.CCDplot, "navigation_toolbar"):
             self.CCDplot.navigation_toolbar.zoom()
 
     def save_figure(self):
         """Open save dialog to save the figure"""
-        if hasattr(self.CCDplot, 'navigation_toolbar'):
+        if hasattr(self.CCDplot, "navigation_toolbar"):
             self.CCDplot.navigation_toolbar.save_figure()
 
     def updateplotfields(self, update_row, CCDplot):
@@ -1222,7 +1365,10 @@ class BuildPanel(ttk.Frame):
             self.ph_label.config(text=str(int(round(v))))
         # If regression is enabled, update the plot so changes take effect immediately
         try:
-            if getattr(self, "ph_checkbox_var", None) and self.ph_checkbox_var.get() == 1:
+            if (
+                getattr(self, "ph_checkbox_var", None)
+                and self.ph_checkbox_var.get() == 1
+            ):
                 try:
                     self.updateplot(self.CCDplot)
                 except Exception:
@@ -1291,7 +1437,7 @@ class BuildPanel(ttk.Frame):
         # Create a frame to hold icon buttons
         button_frame = ttk.Frame(self)
         button_frame.grid(row=about_row, columnspan=3, padx=(0, 30))
-        
+
         # Create three icon buttons
         self.b_icon = ttk.Button(
             button_frame,
@@ -1319,13 +1465,15 @@ class BuildPanel(ttk.Frame):
             command=self.zoom_mode,
         )
         self.b_save_img.pack(side=tk.LEFT, padx=(2, 5))
-        
+
         # Add icon overlays to the buttons
         try:
             from PIL import Image, ImageTk
             import os
 
-            base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+            base_dir = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "assets"
+            )
             preferred = os.path.join(base_dir, "palette.png")
             fallback = os.path.join(base_dir, "astrolens.png")
             icon_path = preferred if os.path.exists(preferred) else fallback
@@ -1372,14 +1520,20 @@ class BuildPanel(ttk.Frame):
                         save_alpha = save_icon_image.getchannel("A")
                     except Exception:
                         save_alpha = save_icon_image.convert("L")
-                    save_black_img = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 255))
-                    save_icon_solid = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 0))
+                    save_black_img = Image.new(
+                        "RGBA", save_icon_image.size, (0, 0, 0, 255)
+                    )
+                    save_icon_solid = Image.new(
+                        "RGBA", save_icon_image.size, (0, 0, 0, 0)
+                    )
                     save_icon_solid.paste(save_black_img, (0, 0), mask=save_alpha)
                     save_icon_resized = save_icon_solid.resize(target_size, resample)
                     icon_photo_zoom = ImageTk.PhotoImage(save_icon_resized)
                 else:
-                    icon_photo_zoom = ImageTk.PhotoImage(icon_solid.resize(target_size, resample))
-                
+                    icon_photo_zoom = ImageTk.PhotoImage(
+                        icon_solid.resize(target_size, resample)
+                    )
+
                 self.icon_overlay_zoom = tk.Label(
                     self.b_zoom,
                     image=icon_photo_zoom,
@@ -1400,14 +1554,20 @@ class BuildPanel(ttk.Frame):
                         lens_alpha = lens_icon_image.getchannel("A")
                     except Exception:
                         lens_alpha = lens_icon_image.convert("L")
-                    lens_black_img = Image.new("RGBA", lens_icon_image.size, (0, 0, 0, 255))
-                    lens_icon_solid = Image.new("RGBA", lens_icon_image.size, (0, 0, 0, 0))
+                    lens_black_img = Image.new(
+                        "RGBA", lens_icon_image.size, (0, 0, 0, 255)
+                    )
+                    lens_icon_solid = Image.new(
+                        "RGBA", lens_icon_image.size, (0, 0, 0, 0)
+                    )
                     lens_icon_solid.paste(lens_black_img, (0, 0), mask=lens_alpha)
                     lens_icon_resized = lens_icon_solid.resize(target_size, resample)
                     icon_photo_save = ImageTk.PhotoImage(lens_icon_resized)
                 else:
-                    icon_photo_save = ImageTk.PhotoImage(icon_solid.resize(target_size, resample))
-                
+                    icon_photo_save = ImageTk.PhotoImage(
+                        icon_solid.resize(target_size, resample)
+                    )
+
                 self.icon_overlay_save = tk.Label(
                     self.b_save_img,
                     image=icon_photo_save,
@@ -1420,7 +1580,7 @@ class BuildPanel(ttk.Frame):
                 self.icon_overlay_save.bind("<Button-1>", lambda e: self.zoom_mode())
         except Exception as e:
             print(f"Could not create icon overlays: {e}")
-        
+
         self.bhelp = ttk.Button(
             button_frame,
             text="Help",
@@ -1428,30 +1588,36 @@ class BuildPanel(ttk.Frame):
             command=self.open_help_url,
         )
         self.bhelp.pack(side=tk.LEFT, padx=(0, 0))
-    
-         # Add AstroLens logo below the buttons
+
+        # Add AstroLens logo below the buttons
         try:
             from PIL import Image, ImageTk
             import os
-            
+
             # Get the path to the PNG file
-            logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "astrolens.png")
-            
+            logo_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "assets", "astrolens.png"
+            )
+
             if os.path.exists(logo_path):
                 logo_image = Image.open(logo_path)
-                
+
                 # Calculate proper aspect ratio resize
                 # Original SVG is 645.31 x 172.4 (aspect ratio ~3.74:1)
                 target_width = 350  # Adjust this to your preferred width
                 aspect_ratio = logo_image.width / logo_image.height
                 target_height = int(target_width / aspect_ratio)
-                
-                logo_image = logo_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+
+                logo_image = logo_image.resize(
+                    (target_width, target_height), Image.Resampling.LANCZOS
+                )
                 logo_photo = ImageTk.PhotoImage(logo_image)
-                
+
                 self.logo_label = ttk.Label(self, image=logo_photo)
                 self.logo_label.image = logo_photo  # Keep a reference
-                self.logo_label.grid(row=about_row + 1, columnspan=3, pady=(40, 5), padx=(7,0))
+                self.logo_label.grid(
+                    row=about_row + 1, columnspan=3, pady=(40, 5), padx=(7, 0)
+                )
         except Exception as e:
             print(f"Could not load logo: {e}")
 

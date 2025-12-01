@@ -56,11 +56,18 @@ def rxtx(panel, SerQueue, progress_var):
 
 
 def rxtxoncethread(panel, SerQueue, progress_var):
-    # open serial port
     try:
-        ser = serial.Serial(config.port, config.baudrate)
+        # Open RX port
+        ser_rx = serial.Serial(config.port, config.baudrate)
         # share the serial handle with the stop-thread so cancel_read may be called
-        SerQueue.put(ser)
+        SerQueue.put(ser_rx)
+
+        # Open TX port if different from RX port
+        if config.port_tx and config.port_tx != config.port:
+            ser_tx = serial.Serial(config.port_tx, config.baudrate)
+        else:
+            ser_tx = ser_rx  # Use same port for both TX and RX
+
         # disable controls
         panelsleep(panel)
         config.stopsignal = 0
@@ -73,10 +80,14 @@ def rxtxoncethread(panel, SerQueue, progress_var):
         threadprogress.start()
 
         # wait to clear the input and output buffers, if they're not empty data is corrupted
-        while ser.in_waiting > 0:
-            ser.reset_input_buffer()
-            ser.reset_output_buffer()
+        while ser_rx.in_waiting > 0:
+            ser_rx.reset_input_buffer()
+            ser_rx.reset_output_buffer()
             time.sleep(0.01)
+
+        # Clear TX buffers if using separate port
+        if ser_tx != ser_rx:
+            ser_tx.reset_output_buffer()
 
         # Transmit key 'ER'
         config.txfull[0] = 69
@@ -95,13 +106,15 @@ def rxtxoncethread(panel, SerQueue, progress_var):
         config.txfull[11] = config.AVGn[1]
 
         # transmit everything at once (the USB-firmware does not work if all bytes are not transmitted in one go)
-        ser.write(config.txfull)
+        ser_tx.write(config.txfull)
 
         # wait for the firmware to return data
-        config.rxData8 = ser.read(7388)
+        config.rxData8 = ser_rx.read(7388)
 
-        # close serial port
-        ser.close()
+        # close serial port(s)
+        if ser_tx != ser_rx:
+            ser_tx.close()
+        ser_rx.close()
 
         # enable all buttons
         panelwakeup(panel)
@@ -129,9 +142,20 @@ def rxtxoncethread(panel, SerQueue, progress_var):
 
 
 def rxtxcontthread(panel, progress_var):
-    # open serial port
+    # open serial port(s)
     try:
-        ser = serial.Serial(config.port, config.baudrate)
+        # Determine TX port (use RX port if TX port is not specified)
+        tx_port = config.port_tx if config.port_tx else config.port
+
+        # Open RX port
+        ser_rx = serial.Serial(config.port, config.baudrate)
+
+        # Open TX port if different from RX port
+        if config.port_tx and config.port_tx != config.port:
+            ser_tx = serial.Serial(config.port_tx, config.baudrate)
+        else:
+            ser_tx = ser_rx  # Use same port for both TX and RX
+
         # disable controls
         panelsleep(panel)
         config.stopsignal = 0
@@ -143,10 +167,14 @@ def rxtxcontthread(panel, progress_var):
         #        threadprogress.start()
 
         # wait to clear the input and output buffers, if they're not empty data is corrupted
-        while ser.in_waiting > 0:
-            ser.reset_input_buffer()
-            ser.reset_output_buffer()
+        while ser_rx.in_waiting > 0:
+            ser_rx.reset_input_buffer()
+            ser_rx.reset_output_buffer()
             time.sleep(0.1)
+
+        # Clear TX buffers if using separate port
+        if ser_tx != ser_rx:
+            ser_tx.reset_output_buffer()
 
         # Transmit key 'ER'
         config.txfull[0] = 69
@@ -165,12 +193,12 @@ def rxtxcontthread(panel, progress_var):
         config.txfull[11] = config.AVGn[1]
 
         # transmit everything at once (the USB-firmware does not work if all bytes are not transmittet in one go)
-        ser.write(config.txfull)
+        ser_tx.write(config.txfull)
 
         # loop to acquire and plot data continuously
         while config.stopsignal == 0:
             # wait for the firmware to return data
-            config.rxData8 = ser.read(7388)
+            config.rxData8 = ser_rx.read(7388)
 
             if config.stopsignal == 0:
                 # combine received bytes into 16-bit data
@@ -187,14 +215,16 @@ def rxtxcontthread(panel, progress_var):
 
         # resend settings with continuous transmission disabled to avoid flooding of the serial port
         config.txfull[10] = 0
-        ser.write(config.txfull)
+        ser_tx.write(config.txfull)
 
         # wait until data is received to close the serial port
-        while ser.out_waiting > 0:
+        while ser_tx.out_waiting > 0:
             time.sleep(0.1)
 
-        # close serial port
-        ser.close()
+        # close serial port(s)
+        if ser_tx != ser_rx:
+            ser_tx.close()
+        ser_rx.close()
         panelwakeup(panel)
         panel.progress.stop()
 
@@ -232,6 +262,7 @@ def panelsleep(panel):
     panel.eICG.config(state=ttk.DISABLED)
     panel.eSH.config(state=ttk.DISABLED)
     panel.edevice.config(state=ttk.DISABLED)
+    panel.edevice_tx.config(state=ttk.DISABLED)
     panel.cinvert.config(state=ttk.DISABLED)
     panel.cbalance.config(state=ttk.DISABLED)
     try:
@@ -251,6 +282,7 @@ def panelwakeup(panel):
     panel.eICG.config(state=ttk.NORMAL)
     panel.eSH.config(state=ttk.NORMAL)
     panel.edevice.config(state=ttk.NORMAL)
+    panel.edevice_tx.config(state=ttk.NORMAL)
     panel.cinvert.config(state=ttk.NORMAL)
     try:
         panel.cmirror.config(state=ttk.NORMAL)
