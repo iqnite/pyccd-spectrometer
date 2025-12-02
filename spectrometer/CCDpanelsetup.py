@@ -60,14 +60,15 @@ class BuildPanel(ttk.Frame):
         # Create all widgets and space between them
         self.header_fields()
         self.mode_fields()
-        self.devicefields()
-        self.CCDparamfields()
-        self.collectmodefields()
         self.collectfields(SerQueue, progress_var)
-        self.plotmodefields(CCDplot)
         self.saveopenfields(CCDplot)
-        self.updateplotfields(CCDplot)
-        self.aboutbutton()
+        self.toolbuttons()
+        self.devicefields()
+        self.collectmodefields()
+        self.plotmodefields(CCDplot)
+        self.CCDparamfields()
+        self.footerfields()
+        # self.updateplotfields(CCDplot)
 
     def header_fields(self):
         """Add header and close button"""
@@ -1495,7 +1496,7 @@ class BuildPanel(ttk.Frame):
         self.bopen.config(state=tk.DISABLED)
         return ()
 
-    def aboutbutton(self):
+    def toolbuttons(self):
         # Create a frame to hold icon buttons
         about_container = ttk.Frame(self)
         about_container.pack(fill=tk.X, pady=5)
@@ -1654,6 +1655,7 @@ class BuildPanel(ttk.Frame):
         )
         self.bhelp.pack(side=tk.LEFT, padx=5)
 
+    def footerfields(self):
         # Add AstroLens logo below the buttons
         try:
             from PIL import Image, ImageTk
@@ -1677,7 +1679,7 @@ class BuildPanel(ttk.Frame):
                 )
                 logo_photo = ImageTk.PhotoImage(logo_image)
 
-                self.logo_label = ttk.Label(about_container, image=logo_photo)
+                self.logo_label = ttk.Label(self, image=logo_photo)
                 self.logo_label.image = logo_photo  # Keep a reference
                 self.logo_label.pack(pady=(40, 5))
         except Exception as e:
