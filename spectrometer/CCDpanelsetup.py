@@ -24,14 +24,16 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
+import os
 import tkinter as tk
 from tkinter import ttk, colorchooser
 import numpy as np
 import serial
 import math
 import webbrowser
+from PIL import Image, ImageTk
 
-from spectrometer import config, CCDhelp, CCDserial, CCDfiles
+from spectrometer import config, CCDserial, CCDfiles, widgets
 from spectrometer.calibration import default_calibration
 from utils import plotgraph
 
@@ -39,15 +41,6 @@ from utils import plotgraph
 class BuildPanel(ttk.Frame):
     def __init__(self, master, CCDplot, SerQueue):
         # geometry-rows for packing the grid
-        mode_row = 5
-        device_row = 15
-        shicg_row = 25
-        continuous_row = 35
-        avg_row = 45
-        collect_row = 55
-        plotmode_row = 65
-        save_row = 75
-        update_row = 85
         progress_var = tk.IntVar()
 
         super().__init__(master)
@@ -66,72 +59,61 @@ class BuildPanel(ttk.Frame):
 
         # Create all widgets and space between them
         self.header_fields()
-        self.grid_rowconfigure(0, minsize=10)
-        self.mode_fields(mode_row)
-        # insert vertical space
-        self.grid_rowconfigure(mode_row + 1, minsize=20)
-        self.devicefields(device_row)
-        # insert vertical space
-        self.grid_rowconfigure(device_row + 1, minsize=30)
-        self.CCDparamfields(shicg_row)
-        # insert vertical space
-        self.grid_rowconfigure(shicg_row + 4, minsize=30)
-        self.collectmodefields(continuous_row)
-        self.avgfields(avg_row)
-        # insert vertical space
-        self.grid_rowconfigure(avg_row + 2, minsize=30)
-        self.collectfields(collect_row, SerQueue, progress_var)
-        # vertical space
-        self.grid_rowconfigure(collect_row + 2, minsize=30)
-        self.plotmodefields(plotmode_row, CCDplot)
-        self.saveopenfields(save_row, CCDplot)
-        self.updateplotfields(update_row, CCDplot)
-        # vertical space
-        self.grid_rowconfigure(update_row + 2, minsize=20)
-        self.aboutbutton(update_row + 3)
+        self.mode_fields()
+        self.devicefields()
+        self.CCDparamfields()
+        self.collectmodefields()
+        self.collectfields(SerQueue, progress_var)
+        self.plotmodefields(CCDplot)
+        self.saveopenfields(CCDplot)
+        self.updateplotfields(CCDplot)
+        self.aboutbutton()
 
     def header_fields(self):
         """Add header and close button"""
-        self.lheader = ttk.Label(
-            self,
-            text="pySPEC",
-            font=("Avenir", 16, "bold"),
-            foreground="#ffc200",
-        )
-        self.lheader.grid(row=0, column=2, pady=10, padx=5, sticky="e")
+        self.header_frame = ttk.Frame(self)
+        self.header_frame.pack(fill=tk.X, pady=10)
+
         self.bclose = ttk.Button(
-            self,
+            self.header_frame,
             text="X",
             style="Accent.TButton",
             command=lambda root=self.master: root.destroy(),
         )
-        self.bclose.grid(row=0, column=3, pady=10)
+        self.bclose.pack(side=tk.RIGHT, padx=5, pady=10)
 
-    def mode_fields(self, mode_row):
-        """Add spectroscopy mode toggle"""
-        ttk.Label(self, text="Operation Mode:").grid(
-            row=mode_row, column=0, padx=5, sticky="e"
+        self.lheader = ttk.Label(
+            self.header_frame,
+            text="pySPEC",
+            font=("Avenir", 16, "bold"),
+            foreground="#ffc200",
         )
+        self.lheader.pack(side=tk.RIGHT, pady=10, padx=5)
+
+    def mode_fields(self):
+        """Add spectroscopy mode toggle"""
+        self.operation_mode_frame = ttk.Frame(self)
+        self.operation_mode_frame.pack(fill=tk.X, padx=5, pady=5)
 
         self.mode_var = tk.IntVar(value=0)  # 0 = Regular, 1 = Spectroscopy
 
         self.r_regular = ttk.Radiobutton(
-            self,
+            self.operation_mode_frame,
             text="Regular Mode",
             variable=self.mode_var,
             value=0,
             command=self.mode_changed,
         )
-        self.r_regular.grid(row=mode_row, column=1, padx=5, sticky="w")
+        self.r_regular.pack(side=tk.LEFT, padx=5)
 
         self.r_spectroscopy = ttk.Radiobutton(
-            self,
+            self.operation_mode_frame,
             text="Spectroscopy Mode",
             variable=self.mode_var,
             value=1,
             command=self.mode_changed,
         )
-        self.r_spectroscopy.grid(row=mode_row + 1, column=1, padx=5, sticky="w")
+        self.r_spectroscopy.pack(side=tk.LEFT, padx=5)
 
     def mode_changed(self):
         """Handle mode switching"""
@@ -182,20 +164,34 @@ class BuildPanel(ttk.Frame):
             if hasattr(self.CCDplot, "canvas"):
                 self.CCDplot.canvas.draw()
 
-    def devicefields(self, device_row):
+    def devicefields(self):
         # device setup - variables, widgets and traces associated with the device entrybox
+        device_frame = widgets.CollapsibleTTK(self, title="Device Setup")
+        device_frame.pack(fill=tk.X, pady=5)
+
         # variables
         self.device_address = tk.StringVar()
         self.device_status = tk.StringVar()
         self.device_statuscolor = tk.StringVar()
-        # widgets
-        self.ldevice = ttk.Label(self, text="COM port (RX/TX):")
-        self.ldevice.grid(column=0, row=device_row, sticky="e")
-        self.edevice = ttk.Entry(self, textvariable=self.device_address, justify="left")
-        self.edevice.grid(column=1, row=device_row, sticky="w", padx=5)
-        self.ldevicestatus = tk.Label(
-            self, textvariable=self.device_status, fg="#ffffff"
+
+        # RX port
+        rx_row = ttk.Frame(device_frame.sub_frame)
+        rx_row.pack(fill=tk.X, pady=5)
+
+        self.ldevice = ttk.Label(rx_row, text="COM port (RX/TX):", justify="right")
+        self.ldevice.pack(side=tk.LEFT, padx=5)
+
+        self.edevice = ttk.Entry(
+            rx_row, textvariable=self.device_address, justify="left"
         )
+        self.edevice.pack(side=tk.RIGHT, padx=5)
+
+        # RX status
+        self.ldevicestatus = tk.Label(
+            device_frame.sub_frame, textvariable=self.device_status, fg="#ffffff"
+        )
+        self.ldevicestatus.pack(anchor=tk.E, padx=5)
+
         # setup trace to check if the device exists
         self.device_address.trace_add(
             "write",
@@ -204,20 +200,28 @@ class BuildPanel(ttk.Frame):
             ),
         )
         self.device_address.set(config.port)
-        self.ldevicestatus.grid(column=1, row=device_row + 1, sticky="w", padx=5)
 
         # TX port field (optional - if empty, uses same as RX)
         self.device_address_tx = tk.StringVar()
-        self.device_status_tx = tk.StringVar()
-        self.ldevice_tx = ttk.Label(self, text="COM port (TX):")
-        self.ldevice_tx.grid(column=0, row=device_row + 2, sticky="e")
+        self.device_status_tx = tk.StringVar(value="Using RX port")
+
+        tx_row = ttk.Frame(device_frame.sub_frame)
+        tx_row.pack(fill=tk.X, pady=5)
+
+        self.ldevice_tx = ttk.Label(tx_row, text="COM port (TX):", justify="right")
+        self.ldevice_tx.pack(side=tk.LEFT, padx=5)
+
         self.edevice_tx = ttk.Entry(
-            self, textvariable=self.device_address_tx, justify="left"
+            tx_row, textvariable=self.device_address_tx, justify="left"
         )
-        self.edevice_tx.grid(column=1, row=device_row + 2, sticky="w", padx=5)
+        self.edevice_tx.pack(side=tk.RIGHT, padx=5)
+
+        # TX status
         self.ldevicestatus_tx = tk.Label(
-            self, textvariable=self.device_status_tx, fg="#ffffff"
+            device_frame.sub_frame, textvariable=self.device_status_tx, fg="#888888"
         )
+        self.ldevicestatus_tx.pack(anchor=tk.E, padx=5)
+
         # setup trace to check if the TX device exists
         self.device_address_tx.trace_add(
             "write",
@@ -227,29 +231,42 @@ class BuildPanel(ttk.Frame):
         )
         if config.port_tx:
             self.device_address_tx.set(config.port_tx)
-        self.ldevicestatus_tx.grid(column=1, row=device_row + 3, sticky="w", padx=5)
+
+        # Update status
+        self.DEVcallback(
+            None,
+            None,
+            None,
+            self.device_address,
+            self.device_status,
+            self.ldevicestatus,
+        )
+
+        # Update TX status
+        self.DEVcallback_tx(
+            None,
+            None,
+            None,
+            self.device_address_tx,
+            self.device_status_tx,
+            self.ldevicestatus_tx,
+        )
 
         # firmware selection
-        self.lfirmware = ttk.Label(self, text="Firmware:")
-        self.lfirmware.grid(column=0, row=device_row + 4, sticky="e", pady=5)
+        firmware_row = ttk.Frame(device_frame.sub_frame)
+        firmware_row.pack(fill=tk.X, pady=5)
+
+        self.lfirmware = ttk.Label(firmware_row, text="Firmware:", justify="right")
+        self.lfirmware.pack(side=tk.LEFT, padx=5)
+
         self.firmware_type = tk.StringVar(value="STM32F40x")
         self.firmware_dropdown = ttk.Combobox(
-            self,
+            firmware_row,
             textvariable=self.firmware_type,
             values=["STM32F40x", "STM32F103"],
             state="readonly",
         )
-        # firmware selection
-        self.lfirmware = ttk.Label(self, text="Firmware:")
-        self.lfirmware.grid(column=0, row=device_row + 4, sticky="e", pady=5)
-        self.firmware_type = tk.StringVar(value="STM32F40x")
-        self.firmware_dropdown = ttk.Combobox(
-            self,
-            textvariable=self.firmware_type,
-            values=["STM32F40x", "STM32F103"],
-            state="readonly",
-        )
-        self.firmware_dropdown.grid(column=1, row=device_row + 4, padx=5, sticky="w")
+        self.firmware_dropdown.pack(side=tk.RIGHT, padx=5)
         self.firmware_type.trace_add("write", self.update_firmware)
 
     def update_firmware(self, *args):
@@ -264,8 +281,11 @@ class BuildPanel(ttk.Frame):
         # Update timings
         self.calculate_timings()
 
-    def CCDparamfields(self, shicg_row):
+    def CCDparamfields(self):
         # CCD parameters - variables, widgets and traces associated with setting exposure
+        ccd_frame = widgets.CollapsibleTTK(self, title="CCD Parameters")
+        ccd_frame.pack(fill=tk.X, pady=5)
+
         # variables
         self.SH = tk.StringVar()
         self.ICG = tk.StringVar()
@@ -274,40 +294,52 @@ class BuildPanel(ttk.Frame):
         self.tint_value = tk.StringVar()  # For exposure time numeric input
         self.tint_unit = tk.StringVar(value="ms")  # Default unit
 
-        # Exposure time input directly gridded for alignment
-        self.l_exposure = ttk.Label(self, text="Exposure Time:")
-        self.l_exposure.grid(column=0, row=shicg_row, pady=5, sticky="e")
-        self.f_exposure = ttk.Frame(self)
-        self.f_exposure.grid(column=1, row=shicg_row, pady=5, padx=5, sticky="w")
-        self.e_tint = ttk.Entry(
-            self.f_exposure, textvariable=self.tint_value, justify="left", width=10
-        )
-        self.e_tint.pack(side=tk.LEFT, anchor="w")
+        # Exposure time input
+        exposure_row = ttk.Frame(ccd_frame.sub_frame)
+        exposure_row.pack(fill=tk.X, pady=5)
+
+        self.l_exposure = ttk.Label(exposure_row, text="Exposure Time:")
+        self.l_exposure.pack(side=tk.LEFT, padx=5)
+
         self.unit_dropdown = ttk.Combobox(
-            self.f_exposure,
+            exposure_row,
             textvariable=self.tint_unit,
             values=["us", "ms", "s", "min"],
             state="readonly",
             width=5,
         )
-        self.unit_dropdown.pack(side=tk.LEFT, padx=5, anchor="w")
+        self.unit_dropdown.pack(side=tk.RIGHT, padx=5)
 
-        # Original SH/ICG fields (keep for display/override, but auto-update)
-        self.lSH = ttk.Label(self, text="SH-period:")
-        self.lSH.grid(column=0, row=shicg_row + 1, pady=5, sticky="e")
-        self.eSH = ttk.Entry(self, textvariable=self.SH, justify="left")
-        self.eSH.grid(column=1, row=shicg_row + 1, padx=5, pady=5, sticky="w")
+        self.e_tint = ttk.Entry(
+            exposure_row, textvariable=self.tint_value, justify="left", width=10
+        )
+        self.e_tint.pack(side=tk.RIGHT, padx=5)
 
-        self.lICG = ttk.Label(self, text="ICG-period:")
-        self.lICG.grid(column=0, row=shicg_row + 2, pady=5, sticky="e")
-        self.eICG = ttk.Entry(self, textvariable=self.ICG, justify="left")
-        self.eICG.grid(column=1, row=shicg_row + 2, padx=5, pady=5, sticky="w")
+        # Original SH/ICG fields
+        sh_row = ttk.Frame(ccd_frame.sub_frame)
+        sh_row.pack(fill=tk.X, pady=5)
+
+        self.lSH = ttk.Label(sh_row, text="SH-period:")
+        self.lSH.pack(side=tk.LEFT, padx=5)
+
+        self.eSH = ttk.Entry(sh_row, textvariable=self.SH, justify="left")
+        self.eSH.pack(side=tk.RIGHT, padx=5)
+
+        icg_row = ttk.Frame(ccd_frame.sub_frame)
+        icg_row.pack(fill=tk.X, pady=5)
+
+        self.lICG = ttk.Label(icg_row, text="ICG-period:")
+        self.lICG.pack(side=tk.LEFT, padx=5)
+
+        self.eICG = ttk.Entry(icg_row, textvariable=self.ICG, justify="left")
+        self.eICG.pack(side=tk.RIGHT, padx=5)
 
         # Status labels
-        self.lccdstatus = tk.Label(self, textvariable=self.tint_status)
-        self.lccdstatus.grid(column=1, row=shicg_row + 3, pady=5, sticky="w")
-        self.ltint = tk.Label(self, textvariable=self.tint_statuscolor)
-        self.ltint.grid(column=1, row=shicg_row + 4, pady=5, sticky="w")
+        self.lccdstatus = tk.Label(ccd_frame.sub_frame, textvariable=self.tint_status)
+        self.lccdstatus.pack(anchor=tk.E, padx=5, pady=5)
+
+        self.ltint = tk.Label(ccd_frame.sub_frame, textvariable=self.tint_statuscolor)
+        self.ltint.pack(anchor=tk.E, padx=5, pady=5)
 
         # Set initial values
         self.SH.set(str(config.SHperiod))
@@ -755,55 +787,72 @@ class BuildPanel(ttk.Frame):
         """Toggle the spectrum color background"""
         self.CCDplot.set_show_colors(self.show_colors.get())
 
-    def collectmodefields(self, continuous_row):
+    def collectmodefields(self):
         # collect mode - variables, widgets and traces associated with the collect mode
+        collect_frame = widgets.CollapsibleTTK(self, title="Collection Options")
+        collect_frame.pack(fill=tk.X, pady=5)
+
         # variables
         self.CONTvar = tk.IntVar()
-        # widgets
-        self.lcontinuous = ttk.Label(self, text="Collection mode:")
-        self.lcontinuous.grid(column=0, row=continuous_row, sticky="e")
+
+        mode_row = ttk.Frame(collect_frame.sub_frame)
+        mode_row.pack(fill=tk.X)
+
         self.roneshot = ttk.Radiobutton(
-            self,
+            mode_row,
             text="One shot",
             variable=self.CONTvar,
             value=0,
             command=lambda CONTvar=self.CONTvar: self.modeset(CONTvar),
         )
-        self.roneshot.grid(column=1, row=continuous_row, sticky="w", padx=5)
+        self.roneshot.pack(side=tk.LEFT, padx=5)
+
         self.rcontinuous = ttk.Radiobutton(
-            self,
+            mode_row,
             text="Continuous",
             variable=self.CONTvar,
             value=1,
             command=lambda CONTvar=self.CONTvar: self.modeset(CONTvar),
         )
-        self.rcontinuous.grid(column=1, row=continuous_row + 1, sticky="w", padx=5)
+        self.rcontinuous.pack(side=tk.LEFT, padx=5)
+
         # set initial state
         self.CONTvar.set(config.AVGn[0])
 
-    def avgfields(self, avg_row):
         # average - variables, widgets and traces associated with the average slider
-        # widgets
-        self.lavg = ttk.Label(self, text="Averages:")
-        self.lavg.grid(column=0, row=avg_row, sticky="e")
+        avg_frame = ttk.Frame(collect_frame.sub_frame)
+        avg_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=5)
+
+        avg_row = ttk.Frame(avg_frame)
+        avg_row.pack(fill=tk.X, pady=5)
+
+        self.lavg = ttk.Label(avg_row, text="Averages")
+        self.lavg.pack(side=tk.LEFT, padx=5)
+
         self.AVGscale = ttk.Scale(
-            self,
+            avg_row,
             from_=1,
             to=255,
             orient=tk.HORIZONTAL,
             length=200,
             command=self.AVGcallback,
         )
-        self.AVGscale.grid(column=1, row=avg_row, padx=5, pady=5, sticky="w")
-        self.AVGlabel = ttk.Label(self)
-        self.AVGlabel.grid(column=2, row=avg_row, padx=5, pady=5, sticky="w")
+        self.AVGscale.pack(side=tk.RIGHT, padx=5)
+
+        self.AVGlabel = ttk.Label(avg_row)
+        self.AVGlabel.pack(side=tk.RIGHT, padx=5)
+
         self.AVGscale.set(config.AVGn[1])
         self.AVGlabel.config(text=str(config.AVGn[1]))
 
-    def collectfields(self, collect_row, SerQueue, progress_var):
+    def collectfields(self, SerQueue, progress_var):
         # collect and stop buttons
-        self.buttonframe = ttk.Frame(self)
-        self.buttonframe.grid(row=collect_row, columnspan=2, padx=(35, 0))
+        button_container = ttk.Frame(self)
+        button_container.pack(fill=tk.X, pady=5)
+
+        self.buttonframe = ttk.Frame(button_container)
+        self.buttonframe.pack(anchor=tk.CENTER)
+
         self.bcollect = ttk.Button(
             self.buttonframe,
             text="Collect",
@@ -813,7 +862,8 @@ class BuildPanel(ttk.Frame):
                 panel, SerQueue, progress_var
             ),
         )
-        self.bcollect.pack(side=tk.LEFT, padx=5, anchor="w")
+        self.bcollect.pack(side=tk.LEFT, padx=5)
+
         self.bstop = ttk.Button(
             self.buttonframe,
             text="Stop",
@@ -821,67 +871,71 @@ class BuildPanel(ttk.Frame):
             command=lambda SerQueue=SerQueue: CCDserial.rxtxcancel(SerQueue),
             state=tk.DISABLED,
         )
-        self.bstop.pack(side=tk.RIGHT, padx=5, pady=5, anchor="e")
+        self.bstop.pack(side=tk.LEFT, padx=5)
+
         # progressbar
         self.progress = ttk.Progressbar(
-            self,
+            button_container,
             variable=progress_var,
             maximum=10,
             length=200,
         )
-        self.progress.grid(row=collect_row + 2, columnspan=2, sticky="EW", padx=(45, 5))
+        self.progress.pack(pady=5)
 
-    def plotmodefields(self, plotmode_row, CCDplot):
+    def plotmodefields(self, CCDplot):
         # plot mode - variables, widgets and traces associated with the plot mode
-        # variables
-        self.invert = tk.IntVar()
-        self.balanced = tk.IntVar()
-        self.show_colors = tk.IntVar()
-        # plot mode - variables, widgets and traces associated with the plot mode
+        plot_frame = widgets.CollapsibleTTK(self, title="Plot Options")
+        plot_frame.pack(fill=tk.X, pady=5)
+
         # variables
         self.invert = tk.IntVar()
         self.balanced = tk.IntVar()
         self.show_colors = tk.IntVar()
 
-        # widgets
-        self.lplot = ttk.Label(self, text="Plot mode:")
-        self.lplot.grid(column=0, row=plotmode_row, sticky="e")
+        plot_label_row = ttk.Frame(plot_frame.sub_frame)
+        plot_label_row.pack(fill=tk.X)
+
         self.cinvert = ttk.Checkbutton(
-            self, text="Invert data", variable=self.invert, onvalue=1, offvalue=0
+            plot_frame.sub_frame,
+            text="Invert data",
+            variable=self.invert,
+            onvalue=1,
+            offvalue=0,
         )
-        self.cinvert.grid(column=1, row=plotmode_row, sticky="w", padx=5)
+        self.cinvert.pack(anchor=tk.W)
+
         self.cbalance = ttk.Checkbutton(
-            self,
+            plot_frame.sub_frame,
             text="Balance even/odd pixels",
             variable=self.balanced,
             onvalue=1,
             offvalue=0,
             state=tk.DISABLED,
         )
-        self.cbalance.grid(column=1, row=plotmode_row + 1, sticky="w", padx=5)
+        self.cbalance.pack(anchor=tk.W)
 
-        # Mirror left/right: place below the balance checkbox
+        # Mirror left/right
         self.mirror = tk.IntVar()
         self.cmirror = ttk.Checkbutton(
-            self,
+            plot_frame.sub_frame,
             text="Mirror data",
             variable=self.mirror,
             onvalue=1,
             offvalue=0,
         )
-        self.cmirror.grid(column=1, row=plotmode_row + 2, sticky="w", padx=5)
+        self.cmirror.pack(anchor=tk.W)
 
         # Show colors checkbox
         self.cshowcolors = ttk.Checkbutton(
-            self,
+            plot_frame.sub_frame,
             text="Show colours",
             variable=self.show_colors,
             onvalue=1,
             offvalue=0,
             command=self.toggle_spectrum_colors,
         )
-        # moved down one row because mirror checkbox was inserted
-        self.cshowcolors.grid(column=1, row=plotmode_row + 3, sticky="w", padx=5)
+        self.cshowcolors.pack(anchor=tk.W)
+
         self.invert.trace_add(
             "write",
             lambda name, index, mode, invert=self.invert, CCDplot=CCDplot: self.RAWcallback(
@@ -908,10 +962,82 @@ class BuildPanel(ttk.Frame):
         self.mirror.set(config.datamirror)
         self.show_colors.set(0)
 
-    def saveopenfields(self, save_row, CCDplot):
+        # Regression controls
+        regression_frame = ttk.Frame(plot_frame.sub_frame)
+        regression_frame.pack(fill=tk.X, pady=5)
+
+        self.ph_checkbox_var = tk.IntVar(value=0)
+        self.ph_check = ttk.Checkbutton(
+            regression_frame,
+            text="Regression",
+            variable=self.ph_checkbox_var,
+            onvalue=1,
+            offvalue=0,
+        )
+        self.ph_check.pack(anchor=tk.W, padx=5)
+
+        # Trace the checkbox
+        self.ph_checkbox_var.trace_add(
+            "write",
+            lambda *args, CCDplot=CCDplot: (
+                self._ph_check_changed(),
+                self.updateplot(CCDplot),
+            ),
+        )
+
+        # Placeholder slider
+        slider_row = ttk.Frame(regression_frame)
+        slider_row.pack(fill=tk.X, pady=5)
+
+        self.lphslider = ttk.Label(slider_row, text="Strength")
+        self.lphslider.pack(side=tk.LEFT, padx=5)
+
+        self.ph_scale = ttk.Scale(
+            slider_row,
+            from_=0,
+            to=100,
+            orient=tk.HORIZONTAL,
+            length=200,
+            command=self._phslider_callback,
+        )
+        self.ph_scale.pack(side=tk.RIGHT, padx=5)
+
+        self.ph_label = tk.Label(slider_row, text="0", fg="#ffffff")
+        self.ph_label.pack(side=tk.RIGHT, padx=5)
+
+        # Set initial enabled/disabled state based on the checkbox
+        self._ph_check_changed()
+
+        # Opacity slider
+        opacity_row = ttk.Frame(regression_frame)
+        opacity_row.pack(fill=tk.X, pady=5)
+
+        self.opacity_scale = ttk.Scale(
+            opacity_row,
+            from_=0,
+            to=100,
+            orient=tk.HORIZONTAL,
+            length=200,
+            command=self._opacity_callback,
+        )
+        self.opacity_scale.pack(side=tk.RIGHT, padx=5)
+
+        self.lopacity = ttk.Label(opacity_row, text="Raw opacity")
+        self.lopacity.pack(side=tk.LEFT, padx=5)
+
+        self.opacity_label = ttk.Label(opacity_row, text="1.00")
+        self.opacity_label.pack(side=tk.RIGHT, padx=5)
+
+        self.opacity_scale.set(100)
+
+    def saveopenfields(self, CCDplot):
         # setup save/open buttons
-        self.fileframe = ttk.Frame(self)
-        self.fileframe.grid(row=save_row, columnspan=2, padx=(40, 0))
+        file_container = ttk.Frame(self)
+        file_container.pack(fill=tk.X)
+
+        self.fileframe = ttk.Frame(file_container)
+        self.fileframe.pack(anchor=tk.CENTER, pady=5)
+
         self.bopen = ttk.Button(
             self.fileframe,
             text="Open",
@@ -937,17 +1063,12 @@ class BuildPanel(ttk.Frame):
             command=self.open_calibration,
         )
 
-        self.bopen.pack(side=tk.LEFT, padx=(5, 0), pady=5)
-        self.bsave.pack(side=tk.LEFT, padx=(5, 0), pady=5)
-        self.bcalib.pack(
-            side=tk.LEFT, padx=(5, 0), pady=5
-        )  # Add some padding to separate from save button
+        self.bopen.pack(side=tk.LEFT, padx=5)
+        self.bsave.pack(side=tk.LEFT, padx=5)
+        self.bcalib.pack(side=tk.LEFT, padx=5)
 
         # Now overlay the icon image on top of the buttons
         try:
-            from PIL import Image, ImageTk
-            import os
-
             # Prefer a small palette icon if present, fallback to astrolens
             base_dir = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)), "assets"
@@ -993,65 +1114,6 @@ class BuildPanel(ttk.Frame):
         except Exception as e:
             print(f"Could not create icon overlay: {e}")
 
-        # Add a little vertical spacing before the placeholder controls
-        self.grid_rowconfigure(save_row + 1, minsize=12)
-
-        # Placeholder controls: a checkbox and a slider (styled like Averages)
-        # Placed below the save/open/calibration buttons
-        self.ph_checkbox_var = tk.IntVar(value=0)
-        self.ph_check = ttk.Checkbutton(
-            self,
-            text="Toggle regression",
-            variable=self.ph_checkbox_var,
-            onvalue=1,
-            offvalue=0,
-        )
-        self.ph_check.grid(column=1, row=save_row + 2, sticky="w", padx=5)
-        # Trace the checkbox so we can enable/disable the slider dynamically
-        # Also trigger a plot update so the regression overlay appears immediately
-        self.ph_checkbox_var.trace_add(
-            "write",
-            lambda *args, CCDplot=CCDplot: (
-                self._ph_check_changed(),
-                self.updateplot(CCDplot),
-            ),
-        )
-
-        # Placeholder slider similar to Averages
-        self.lphslider = ttk.Label(self, text="Strength")
-        self.lphslider.grid(column=0, row=save_row + 3, sticky="e")
-        self.ph_scale = ttk.Scale(
-            self,
-            from_=0,
-            to=100,
-            orient=tk.HORIZONTAL,
-            length=200,
-            command=self._phslider_callback,
-        )
-        self.ph_scale.grid(column=1, row=save_row + 3, padx=5, pady=5, sticky="w")
-        # Use a tk.Label so we can change the foreground color when disabled
-        self.ph_label = tk.Label(self, text="0", fg="#ffffff")
-        self.ph_label.grid(column=2, row=save_row + 3, padx=5, pady=5, sticky="w")
-
-        # Set initial enabled/disabled state based on the checkbox
-        self._ph_check_changed()
-
-        # Opacity slider for the main plot line (0..100 -> 0.0..1.0)
-        self.lopacity = ttk.Label(self, text="Raw opacity")
-        self.lopacity.grid(column=0, row=save_row + 4, sticky="e")
-        self.opacity_scale = ttk.Scale(
-            self,
-            from_=0,
-            to=100,
-            orient=tk.HORIZONTAL,
-            length=200,
-            command=self._opacity_callback,
-        )
-        self.opacity_scale.grid(column=1, row=save_row + 4, padx=5, pady=5, sticky="w")
-        self.opacity_label = ttk.Label(self, text="1.00")
-        self.opacity_label.grid(column=2, row=save_row + 4, padx=5, pady=5, sticky="w")
-        self.opacity_scale.set(100)
-
     def open_calibration(self):
         """Open calibration window with proper callback reference"""
         default_calibration.open_calibration_window(
@@ -1091,7 +1153,7 @@ class BuildPanel(ttk.Frame):
         # Main plot color section
         ttk.Label(
             self.color_window, text="Main Plot Colour:", font=("Avenir", 10, "bold")
-        ).pack(pady=(20, 5))
+        ).pack(pady=5)
 
         main_color_frame = ttk.Frame(self.color_window)
         main_color_frame.pack(pady=5)
@@ -1105,7 +1167,7 @@ class BuildPanel(ttk.Frame):
             relief="solid",
             borderwidth=1,
         )
-        self.main_color_preview.pack(side=tk.LEFT, padx=(10, 5))
+        self.main_color_preview.pack(side=tk.LEFT, padx=5)
 
         ttk.Button(
             main_color_frame,
@@ -1119,7 +1181,7 @@ class BuildPanel(ttk.Frame):
             self.color_window,
             text="Regression Line Colour:",
             font=("Avenir", 10, "bold"),
-        ).pack(pady=(20, 5))
+        ).pack(pady=5)
 
         regression_color_frame = ttk.Frame(self.color_window)
         regression_color_frame.pack(pady=5)
@@ -1133,7 +1195,7 @@ class BuildPanel(ttk.Frame):
             relief="solid",
             borderwidth=1,
         )
-        self.regression_color_preview.pack(side=tk.LEFT, padx=(10, 5))
+        self.regression_color_preview.pack(side=tk.LEFT, padx=5)
 
         ttk.Button(
             regression_color_frame,
@@ -1148,7 +1210,7 @@ class BuildPanel(ttk.Frame):
         # Compare data section
         ttk.Label(
             self.color_window, text="Compare Data:", font=("Avenir", 10, "bold")
-        ).pack(pady=(5, 5))
+        ).pack(pady=5)
 
         compare_frame = ttk.Frame(self.color_window)
         compare_frame.pack(pady=5)
@@ -1256,7 +1318,7 @@ class BuildPanel(ttk.Frame):
                 self.compare_color_section,
                 text="Comparison Data Colour:",
                 font=("Avenir", 10, "bold"),
-            ).pack(pady=(10, 5))
+            ).pack(pady=5)
 
             compare_color_frame = ttk.Frame(self.compare_color_section)
             compare_color_frame.pack(pady=5)
@@ -1270,7 +1332,7 @@ class BuildPanel(ttk.Frame):
                 relief="solid",
                 borderwidth=1,
             )
-            self.compare_color_preview.pack(side=tk.LEFT, padx=(10, 5))
+            self.compare_color_preview.pack(side=tk.LEFT, padx=5)
 
             ttk.Button(
                 compare_color_frame,
@@ -1336,7 +1398,7 @@ class BuildPanel(ttk.Frame):
         if hasattr(self.CCDplot, "navigation_toolbar"):
             self.CCDplot.navigation_toolbar.save_figure()
 
-    def updateplotfields(self, update_row, CCDplot):
+    def updateplotfields(self, CCDplot):
         self.bupdate = ttk.Button(
             self,
             text="Update plot",
@@ -1346,7 +1408,7 @@ class BuildPanel(ttk.Frame):
         self.bupdate.event_generate("<ButtonPress>", when="tail")
 
         # commented out, it's needed to inject an event into the ttk.mainloop for updating the plot from the 'checkfordata' thread
-        # self.bupdate.grid(row=update_row, columnspan=3, sticky="EW", padx=5)
+        # self.bupdate.pack(fill=tk.X, padx=5)
 
     def _phslider_callback(self, val):
         """Internal callback for the placeholder slider to update the label."""
@@ -1433,10 +1495,13 @@ class BuildPanel(ttk.Frame):
         self.bopen.config(state=tk.DISABLED)
         return ()
 
-    def aboutbutton(self, about_row):
+    def aboutbutton(self):
         # Create a frame to hold icon buttons
-        button_frame = ttk.Frame(self)
-        button_frame.grid(row=about_row, columnspan=3, padx=(0, 30))
+        about_container = ttk.Frame(self)
+        about_container.pack(fill=tk.X, pady=5)
+
+        button_frame = ttk.Frame(about_container)
+        button_frame.pack(anchor=tk.CENTER)
 
         # Create three icon buttons
         self.b_icon = ttk.Button(
@@ -1446,7 +1511,7 @@ class BuildPanel(ttk.Frame):
             width=3,
             command=self.open_color_picker,
         )
-        self.b_icon.pack(side=tk.LEFT, padx=(0, 2))
+        self.b_icon.pack(side=tk.LEFT, padx=2)
 
         self.b_zoom = ttk.Button(
             button_frame,
@@ -1464,7 +1529,7 @@ class BuildPanel(ttk.Frame):
             width=3,
             command=self.zoom_mode,
         )
-        self.b_save_img.pack(side=tk.LEFT, padx=(2, 5))
+        self.b_save_img.pack(side=tk.LEFT, padx=2)
 
         # Add icon overlays to the buttons
         try:
@@ -1587,7 +1652,7 @@ class BuildPanel(ttk.Frame):
             width=11,
             command=self.open_help_url,
         )
-        self.bhelp.pack(side=tk.LEFT, padx=(0, 0))
+        self.bhelp.pack(side=tk.LEFT, padx=5)
 
         # Add AstroLens logo below the buttons
         try:
@@ -1603,8 +1668,7 @@ class BuildPanel(ttk.Frame):
                 logo_image = Image.open(logo_path)
 
                 # Calculate proper aspect ratio resize
-                # Original SVG is 645.31 x 172.4 (aspect ratio ~3.74:1)
-                target_width = 350  # Adjust this to your preferred width
+                target_width = 350
                 aspect_ratio = logo_image.width / logo_image.height
                 target_height = int(target_width / aspect_ratio)
 
@@ -1613,11 +1677,9 @@ class BuildPanel(ttk.Frame):
                 )
                 logo_photo = ImageTk.PhotoImage(logo_image)
 
-                self.logo_label = ttk.Label(self, image=logo_photo)
+                self.logo_label = ttk.Label(about_container, image=logo_photo)
                 self.logo_label.image = logo_photo  # Keep a reference
-                self.logo_label.grid(
-                    row=about_row + 1, columnspan=3, pady=(40, 5), padx=(7, 0)
-                )
+                self.logo_label.pack(pady=(40, 5))
         except Exception as e:
             print(f"Could not load logo: {e}")
 
