@@ -501,11 +501,11 @@ class BuildPanel(ttk.Frame):
             # Normal COM port checking
             try:
                 ser = serial.Serial(config.port, config.baudrate, timeout=1)
-                status.set("Device found")
+                status.set("Port found")
                 ser.close()
                 colr.configure(fg="#ffffff")
             except serial.SerialException:
-                status.set("Device not found")
+                status.set("Port not found")
                 colr.configure(fg="#ffc200")
 
     def DEVcallback_tx(self, name, index, mode, Device, status, colr):
@@ -535,11 +535,11 @@ class BuildPanel(ttk.Frame):
             # Normal COM port checking
             try:
                 ser = serial.Serial(config.port_tx, config.baudrate, timeout=1)
-                status.set("Device found")
+                status.set("Port found")
                 ser.close()
                 colr.configure(fg="#ffffff")
             except serial.SerialException:
-                status.set("Device not found")
+                status.set("Port not found")
                 colr.configure(fg="#ffc200")
 
     def updateplot(self, CCDplot):
