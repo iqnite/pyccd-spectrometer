@@ -1,0 +1,6 @@
+Kivy
+numpy
+opencv-python
+matplotlib
+pyserial
+Pillow
