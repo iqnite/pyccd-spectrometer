@@ -332,15 +332,12 @@ class BuildPanel(ttk.Frame):
         self.CONTvar.set(config.AVGn[0])
 
         # average - variables, widgets and traces associated with the average slider
+        self.lavg = ttk.Label(collect_frame, text="Averages", justify=tk.LEFT)
+        self.lavg.pack(padx=5, pady=(10, 2))
         avg_frame = ttk.Frame(collect_frame)
-        avg_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=5)
-
+        avg_frame.pack(fill=tk.X, pady=5)
         avg_row = ttk.Frame(avg_frame)
         avg_row.pack(fill=tk.X, pady=5)
-
-        self.lavg = ttk.Label(avg_row, text="Averages")
-        self.lavg.pack(side=tk.LEFT, padx=5)
-
         self.AVGscale = ttk.Scale(
             avg_row,
             from_=1,
@@ -349,45 +346,42 @@ class BuildPanel(ttk.Frame):
             length=200,
             command=self.AVGcallback,
         )
-        self.AVGscale.pack(side=tk.RIGHT, padx=5)
-
+        self.AVGscale.pack(side=tk.LEFT, padx=5)
         self.AVGlabel = ttk.Label(avg_row)
-        self.AVGlabel.pack(side=tk.RIGHT, padx=5)
+        self.AVGlabel.pack(side=tk.LEFT, padx=5)
 
         self.AVGscale.set(config.AVGn[1])
         self.AVGlabel.config(text=str(config.AVGn[1]))
 
     def collectfields(self, SerQueue, progress_var):
         # collect and stop buttons
-        button_container = ttk.Frame(self)
-        button_container.pack(fill=tk.X, pady=5)
+        self.button_container = ttk.Frame(self)
+        self.button_container.pack(fill=tk.X, pady=5)
 
-        self.buttonframe = ttk.Frame(button_container)
-        self.buttonframe.pack(anchor=tk.CENTER)
+        self.buttonframe = ttk.Frame(self.button_container)
+        self.buttonframe.pack(fill=tk.X)
 
         self.bcollect = ttk.Button(
             self.buttonframe,
             text="Collect",
-            width=15,
             style="Accent.TButton",
             command=lambda panel=self, SerQueue=SerQueue, progress_var=progress_var: CCDserial.rxtx(
                 panel, SerQueue, progress_var
             ),
         )
-        self.bcollect.pack(side=tk.LEFT, padx=5)
+        self.bcollect.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
 
         self.bstop = ttk.Button(
             self.buttonframe,
             text="Stop",
-            width=15,
             command=lambda SerQueue=SerQueue: CCDserial.rxtxcancel(SerQueue),
             state=tk.DISABLED,
         )
-        self.bstop.pack(side=tk.LEFT, padx=5)
+        self.bstop.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
 
         # progressbar
         self.progress = ttk.Progressbar(
-            button_container,
+            self.button_container,
             variable=progress_var,
             maximum=10,
             length=200,
@@ -494,12 +488,10 @@ class BuildPanel(ttk.Frame):
         )
 
         # Placeholder slider
+        self.lphslider = ttk.Label(regression_frame, text="Strength")
+        self.lphslider.pack(padx=5)
         slider_row = ttk.Frame(regression_frame)
         slider_row.pack(fill=tk.X, pady=5)
-
-        self.lphslider = ttk.Label(slider_row, text="Strength")
-        self.lphslider.pack(side=tk.LEFT, padx=5)
-
         self.ph_scale = ttk.Scale(
             slider_row,
             from_=0,
@@ -508,18 +500,18 @@ class BuildPanel(ttk.Frame):
             length=200,
             command=self._phslider_callback,
         )
-        self.ph_scale.pack(side=tk.RIGHT, padx=5)
-
+        self.ph_scale.pack(side=tk.LEFT, padx=5)
         self.ph_label = tk.Label(slider_row, text="0", fg="#ffffff")
-        self.ph_label.pack(side=tk.RIGHT, padx=5)
+        self.ph_label.pack(side=tk.LEFT, padx=5)
 
         # Set initial enabled/disabled state based on the checkbox
         self._ph_check_changed()
 
         # Opacity slider
+        self.lopacity = ttk.Label(regression_frame, text="Raw opacity")
+        self.lopacity.pack(padx=5)
         opacity_row = ttk.Frame(regression_frame)
         opacity_row.pack(fill=tk.X, pady=5)
-
         self.opacity_scale = ttk.Scale(
             opacity_row,
             from_=0,
@@ -528,52 +520,41 @@ class BuildPanel(ttk.Frame):
             length=200,
             command=self._opacity_callback,
         )
-        self.opacity_scale.pack(side=tk.RIGHT, padx=5)
-
-        self.lopacity = ttk.Label(opacity_row, text="Raw opacity")
-        self.lopacity.pack(side=tk.LEFT, padx=5)
-
+        self.opacity_scale.pack(side=tk.LEFT, padx=5)
         self.opacity_label = ttk.Label(opacity_row, text="1.00")
-        self.opacity_label.pack(side=tk.RIGHT, padx=5)
-
+        self.opacity_label.pack(side=tk.LEFT, padx=5)
         self.opacity_scale.set(100)
 
     def saveopenfields(self, CCDplot: CCDplots.BuildPlot):
         # setup save/open buttons
-        file_container = ttk.Frame(self)
-        file_container.pack(fill=tk.X)
-
-        self.fileframe = ttk.Frame(file_container)
-        self.fileframe.pack(anchor=tk.CENTER, pady=5)
+        self.fileframe = ttk.Frame(self)
+        self.fileframe.pack(pady=5, fill=tk.X)
 
         self.bopen = ttk.Button(
             self.fileframe,
             text="Open",
             style="Accent.TButton",
-            width=11,
             command=lambda self=self, CCDplot=CCDplot: CCDfiles.openfile(self, CCDplot),
         )
         self.bsave = ttk.Button(
             self.fileframe,
             text="Save",
             style="Accent.TButton",
-            width=11,
             state=tk.DISABLED,
             command=lambda self=self: CCDfiles.savefile(self),
         )
 
         # Add calibration button next to save button
         self.bcalib = ttk.Button(
-            self.fileframe,
+            self,
             text="Calibration",
             style="Accent.TButton",
-            width=11,
             command=self.open_calibration,
         )
 
-        self.bopen.pack(side=tk.LEFT, padx=5)
-        self.bsave.pack(side=tk.LEFT, padx=5)
-        self.bcalib.pack(side=tk.LEFT, padx=5)
+        self.bopen.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        self.bsave.pack(side=tk.RIGHT, padx=5, fill=tk.X, expand=True)
+        self.bcalib.pack(padx=5, pady=5, fill=tk.X)
 
         # Now overlay the icon image on top of the buttons
         try:
@@ -1005,35 +986,32 @@ class BuildPanel(ttk.Frame):
 
     def toolbuttons(self):
         button_frame = ttk.Frame(self)
-        button_frame.pack(anchor=tk.CENTER)
+        button_frame.pack(padx=3, pady=5, fill=tk.X)
 
         # Create three icon buttons
         self.b_icon = ttk.Button(
             button_frame,
             text="",
             style="Accent.TButton",
-            width=3,
             command=self.open_color_picker,
         )
-        self.b_icon.pack(side=tk.LEFT, padx=2)
+        self.b_icon.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
 
         self.b_zoom = ttk.Button(
             button_frame,
             text="",
             style="Accent.TButton",
-            width=3,
             command=self.save_figure,
         )
-        self.b_zoom.pack(side=tk.LEFT, padx=2)
+        self.b_zoom.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
 
         self.b_save_img = ttk.Button(
             button_frame,
             text="",
             style="Accent.TButton",
-            width=3,
             command=self.zoom_mode,
         )
-        self.b_save_img.pack(side=tk.LEFT, padx=2)
+        self.b_save_img.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
 
         # Add icon overlays to the buttons
         try:
