@@ -33,7 +33,7 @@ from io import BytesIO
 import csv
 import numpy as np
 
-from spectrometer import config, CCDpanelsetup
+from spectrometer import CCDpanelsetup, config
 from utils import plotgraph
 
 

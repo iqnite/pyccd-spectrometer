@@ -63,7 +63,7 @@ plot_grid.grid_columnconfigure(0, weight=1)  # Plot column expands
 plot_grid.grid_columnconfigure(1, weight=0)  # Panel column fixed
 
 # Place widgets with proper expansion
-header_panel.pack(fill="x", side="top")
+header_panel.pack(fill="x", side="top", padx=5, pady=5)
 plot_grid.pack(fill="both", expand=True)
 CCDplot.grid(row=0, column=0, sticky="nsew")
 right_panel.grid(row=0, column=1, sticky="ns", padx=(35, 2))
