@@ -55,10 +55,10 @@ class BuildPanel(ttk.Frame):
         self.comparison_filename = None
 
         # Create all widgets and space between them
+        self.collectmodefields()
         self.collectfields(SerQueue, progress_var)
         self.saveopenfields(CCDplot)
         self.toolbuttons()
-        self.collectmodefields()
         self.plotmodefields(CCDplot)
         # self.updateplotfields(CCDplot)
 
@@ -1040,9 +1040,6 @@ class BuildPanel(ttk.Frame):
 
         # Add icon overlays to the buttons
         try:
-            from PIL import Image, ImageTk
-            import os
-
             base_dir = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)), "assets"
             )
