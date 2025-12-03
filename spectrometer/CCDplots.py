@@ -78,7 +78,6 @@ class BuildPlot(ttk.Frame):
                 self.a, current_spectroscopy_mode, current_show_colors
             )
             self.spectroscopy_mode = current_spectroscopy_mode
-            self.show_colors.set(current_show_colors)
 
         except Exception as e:
             print(f"Error updating spectrum background: {e}")
