@@ -25,24 +25,32 @@
 # SUCH DAMAGE.
 
 import os
+import queue
 import tkinter as tk
 from tkinter import ttk, colorchooser
 import numpy as np
 from PIL import Image, ImageTk
 
-from spectrometer import CCDplots, config, CCDserial, CCDfiles
+from spectrometer import CCDplots, config, CCDserial, CCDfiles, header
 from spectrometer.calibration import default_calibration
 from utils import plotgraph
 
 
 class BuildPanel(ttk.Frame):
-    def __init__(self, master, CCDplot: CCDplots.BuildPlot, SerQueue):
+    def __init__(
+        self,
+        master,
+        header: header.HeaderPanel,
+        CCDplot: CCDplots.BuildPlot,
+        SerQueue: queue.Queue,
+    ):
         # geometry-rows for packing the grid
         progress_var = tk.IntVar()
 
         super().__init__(master)
 
-        # Store CCDplot reference for callbacks
+        # Store references for callbacks
+        self.header = header
         self.CCDplot = CCDplot
 
         # Initialize plot colors
@@ -353,7 +361,7 @@ class BuildPanel(ttk.Frame):
         self.AVGscale.set(config.AVGn[1])
         self.AVGlabel.config(text=str(config.AVGn[1]))
 
-    def collectfields(self, SerQueue, progress_var):
+    def collectfields(self, SerQueue: queue.Queue, progress_var):
         # collect and stop buttons
         self.button_container = ttk.Frame(self)
         self.button_container.pack(fill=tk.X, pady=5)

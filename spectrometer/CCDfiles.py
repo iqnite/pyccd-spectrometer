@@ -28,16 +28,14 @@
 import tkinter as tk
 from tkinter import filedialog
 from tkinter import messagebox
-from PIL import Image, ImageTk
-from io import BytesIO
 import csv
 import numpy as np
 
-from spectrometer import CCDpanelsetup, config
+from spectrometer import CCDpanelsetup, CCDplots, config
 from utils import plotgraph
 
 
-def openfile(self, CCDplot):
+def openfile(self, CCDplot: CCDplots.BuildPlot):
     filename = filedialog.askopenfilename(
         defaultextension=".dat", title="Open file", parent=self
     )

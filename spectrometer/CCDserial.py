@@ -25,13 +25,18 @@
 # SUCH DAMAGE.
 
 
-from tkinter import messagebox
+import queue
 import serial
+import threading
+import time
+import tkinter as ttk
+from tkinter import messagebox
+from typing import TYPE_CHECKING
 
 from spectrometer import config
-import threading
-import tkinter as ttk
-import time
+
+if TYPE_CHECKING:
+    from spectrometer import CCDpanelsetup
 
 
 # The firmware expects 12 bytes from the computer and will not do anything until 12 bytes have been received.
@@ -41,7 +46,7 @@ import time
 # byte[7-10]: The 4 bytes constituting the 32-bit int holding the ICG-period
 # byte[11]: Continuous flag: 0 equals one acquisition, 1 equals continuous mode
 # byte[12]: The number of integrations to average
-def rxtx(panel, SerQueue, progress_var):
+def rxtx(panel, SerQueue: queue.Queue, progress_var):
     threadser = None
     if config.AVGn[0] == 0:
         threadser = threading.Thread(
@@ -55,7 +60,7 @@ def rxtx(panel, SerQueue, progress_var):
         threadser.start()
 
 
-def rxtxoncethread(panel, SerQueue, progress_var):
+def rxtxoncethread(panel, SerQueue: queue.Queue, progress_var):
     try:
         # Open RX port
         ser_rx = serial.Serial(config.port, config.baudrate)
@@ -243,7 +248,7 @@ def progressthread(progress_var):
         time.sleep(config.ICGperiod * config.AVGn[1] / config.MCLK / 10)
 
 
-def rxtxcancel(SerQueue):
+def rxtxcancel(SerQueue: queue.Queue):
     config.stopsignal = 1
     # Are we stopping one very long measurement, or the continuous real-time view?
     if config.AVGn[0] == 0:
@@ -251,7 +256,7 @@ def rxtxcancel(SerQueue):
         ser.cancel_read()
 
 
-def panelsleep(panel):
+def panelsleep(panel: "CCDpanelsetup.BuildPanel"):
     panel.bstop.config(state=ttk.NORMAL)
     panel.bopen.config(state=ttk.DISABLED)
     panel.bsave.config(state=ttk.DISABLED)
@@ -259,10 +264,10 @@ def panelsleep(panel):
     panel.AVGscale.config(state=ttk.DISABLED)
     panel.rcontinuous.config(state=ttk.DISABLED)
     panel.roneshot.config(state=ttk.DISABLED)
-    panel.eICG.config(state=ttk.DISABLED)
-    panel.eSH.config(state=ttk.DISABLED)
-    panel.edevice.config(state=ttk.DISABLED)
-    panel.edevice_tx.config(state=ttk.DISABLED)
+    panel.header.eICG.config(state=ttk.DISABLED)
+    panel.header.eSH.config(state=ttk.DISABLED)
+    panel.header.edevice.config(state=ttk.DISABLED)
+    panel.header.edevice_tx.config(state=ttk.DISABLED)
     panel.cinvert.config(state=ttk.DISABLED)
     panel.cbalance.config(state=ttk.DISABLED)
     try:
@@ -271,7 +276,7 @@ def panelsleep(panel):
         pass
 
 
-def panelwakeup(panel):
+def panelwakeup(panel: "CCDpanelsetup.BuildPanel"):
     panel.bstop.config(state=ttk.DISABLED)
     panel.bopen.config(state=ttk.NORMAL)
     panel.bsave.config(state=ttk.NORMAL)
@@ -279,10 +284,10 @@ def panelwakeup(panel):
     panel.AVGscale.config(state=ttk.NORMAL)
     panel.rcontinuous.config(state=ttk.NORMAL)
     panel.roneshot.config(state=ttk.NORMAL)
-    panel.eICG.config(state=ttk.NORMAL)
-    panel.eSH.config(state=ttk.NORMAL)
-    panel.edevice.config(state=ttk.NORMAL)
-    panel.edevice_tx.config(state=ttk.NORMAL)
+    panel.header.eICG.config(state=ttk.NORMAL)
+    panel.header.eSH.config(state=ttk.NORMAL)
+    panel.header.edevice.config(state=ttk.NORMAL)
+    panel.header.edevice_tx.config(state=ttk.NORMAL)
     panel.cinvert.config(state=ttk.NORMAL)
     try:
         panel.cmirror.config(state=ttk.NORMAL)
