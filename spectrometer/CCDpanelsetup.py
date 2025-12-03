@@ -1003,11 +1003,7 @@ class BuildPanel(ttk.Frame):
         return ()
 
     def toolbuttons(self):
-        # Create a frame to hold icon buttons
-        about_container = ttk.Frame(self)
-        about_container.pack(fill=tk.X, pady=5)
-
-        button_frame = ttk.Frame(about_container)
+        button_frame = ttk.Frame(self)
         button_frame.pack(anchor=tk.CENTER)
 
         # Create three icon buttons
