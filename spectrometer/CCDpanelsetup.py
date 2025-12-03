@@ -30,7 +30,6 @@ from tkinter import ttk, colorchooser
 import numpy as np
 import serial
 import math
-import webbrowser
 from PIL import Image, ImageTk
 
 from spectrometer import CCDplots, config, CCDserial, CCDfiles, widgets
@@ -1543,18 +1542,3 @@ class BuildPanel(ttk.Frame):
                 self.icon_overlay_save.bind("<Button-1>", lambda e: self.zoom_mode())
         except Exception as e:
             print(f"Could not create icon overlays: {e}")
-
-        self.bhelp = ttk.Button(
-            button_frame,
-            text="Help",
-            width=11,
-            command=self.open_help_url,
-        )
-        self.bhelp.pack(side=tk.LEFT, padx=5)
-
-    def open_help_url(self):
-        """Open the help URL in the default browser"""
-        try:
-            webbrowser.open("https://www.astrolens.net/pyspec-help")
-        except Exception as e:
-            print(f"Failed to open browser: {e}")

@@ -5,6 +5,7 @@ Top panel for the spectrometer GUI
 import os
 import tkinter as tk
 from tkinter import ttk
+import webbrowser
 import numpy as np
 from PIL import Image, ImageTk
 
@@ -21,10 +22,10 @@ class HeaderPanel(ttk.Frame):
 
         self.logo_display()
         self.mode_fields()
-        self.close_button()
+        self.right_buttons()
 
-    def close_button(self):
-        """Add close button"""
+    def right_buttons(self):
+        """Add close and help buttons"""
         self.bclose = ttk.Button(
             self,
             text="X",
@@ -32,6 +33,21 @@ class HeaderPanel(ttk.Frame):
             command=lambda root=self.master: root.destroy(),
         )
         self.bclose.pack(side=tk.RIGHT, padx=5)
+
+        self.bhelp = ttk.Button(
+            self,
+            text="Help",
+            width=7,
+            command=self.open_help_url,
+        )
+        self.bhelp.pack(side=tk.RIGHT, padx=5)
+
+    def open_help_url(self):
+        """Open the help URL in the default browser"""
+        try:
+            webbrowser.open("https://www.astrolens.net/pyspec-help")
+        except Exception as e:
+            print(f"Failed to open browser: {e}")
 
     def logo_display(self):
         """Display the Astrolens logo at the top of the panel"""
