@@ -160,16 +160,16 @@ class HeaderPanel(ttk.Frame):
         self.port_frame.pack(side=tk.LEFT, padx=5, fill="y")
 
         # RX port
-        self.ldevice = ttk.Label(self.port_frame, text="RX/TX")
+        self.ldevice = ttk.Label(self.port_frame, text="RX/TX:")
         self.ldevice.grid(row=0, column=0, padx=5)
         self.edevice = ttk.Entry(
             self.port_frame, textvariable=self.device_address, width=7
         )
-        self.edevice.grid(row=1, column=0, padx=5)
+        self.edevice.grid(row=0, column=1, padx=5)
         self.ldevicestatus = tk.Label(
             self.port_frame, textvariable=self.device_status, fg="#ffffff"
         )
-        self.ldevicestatus.grid(row=2, column=0, padx=5)
+        self.ldevicestatus.grid(row=1, column=1, padx=5)
 
         # setup trace to check if the device exists
         self.device_address.trace_add(
@@ -184,16 +184,16 @@ class HeaderPanel(ttk.Frame):
         self.device_address_tx = tk.StringVar()
         self.device_status_tx = tk.StringVar(value="Using RX")
 
-        self.ldevice_tx = ttk.Label(self.port_frame, text="TX")
-        self.ldevice_tx.grid(row=0, column=1, padx=5)
+        self.ldevice_tx = ttk.Label(self.port_frame, text="TX:")
+        self.ldevice_tx.grid(row=0, column=2, padx=5)
         self.edevice_tx = ttk.Entry(
             self.port_frame, textvariable=self.device_address_tx, width=7
         )
-        self.edevice_tx.grid(row=1, column=1, padx=5)
+        self.edevice_tx.grid(row=0, column=3, padx=5)
         self.ldevicestatus_tx = tk.Label(
             self.port_frame, textvariable=self.device_status_tx, fg="#888888"
         )
-        self.ldevicestatus_tx.grid(row=2, column=1, padx=5)
+        self.ldevicestatus_tx.grid(row=1, column=3, padx=5)
         # setup trace to check if the TX device exists
         self.device_address_tx.trace_add(
             "write",
