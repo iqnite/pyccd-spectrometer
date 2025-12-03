@@ -58,7 +58,6 @@ class BuildPanel(ttk.Frame):
         self.comparison_filename = None
 
         # Create all widgets and space between them
-        self.header_fields()
         self.mode_fields()
         self.collectfields(SerQueue, progress_var)
         self.saveopenfields(CCDplot)
@@ -67,29 +66,7 @@ class BuildPanel(ttk.Frame):
         self.collectmodefields()
         self.plotmodefields(CCDplot)
         self.CCDparamfields()
-        self.footerfields()
         # self.updateplotfields(CCDplot)
-
-    def header_fields(self):
-        """Add header and close button"""
-        self.header_frame = ttk.Frame(self)
-        self.header_frame.pack(fill=tk.X, pady=10)
-
-        self.bclose = ttk.Button(
-            self.header_frame,
-            text="X",
-            style="Accent.TButton",
-            command=lambda root=self.master: root.destroy(),
-        )
-        self.bclose.pack(side=tk.RIGHT, padx=5, pady=10)
-
-        self.lheader = ttk.Label(
-            self.header_frame,
-            text="pySPEC",
-            font=("Avenir", 16, "bold"),
-            foreground="#ffc200",
-        )
-        self.lheader.pack(side=tk.RIGHT, pady=10, padx=5)
 
     def mode_fields(self):
         """Add spectroscopy mode toggle"""
@@ -1654,36 +1631,6 @@ class BuildPanel(ttk.Frame):
             command=self.open_help_url,
         )
         self.bhelp.pack(side=tk.LEFT, padx=5)
-
-    def footerfields(self):
-        # Add AstroLens logo below the buttons
-        try:
-            from PIL import Image, ImageTk
-            import os
-
-            # Get the path to the PNG file
-            logo_path = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), "assets", "astrolens.png"
-            )
-
-            if os.path.exists(logo_path):
-                logo_image = Image.open(logo_path)
-
-                # Calculate proper aspect ratio resize
-                target_width = 350
-                aspect_ratio = logo_image.width / logo_image.height
-                target_height = int(target_width / aspect_ratio)
-
-                logo_image = logo_image.resize(
-                    (target_width, target_height), Image.Resampling.LANCZOS
-                )
-                logo_photo = ImageTk.PhotoImage(logo_image)
-
-                self.logo_label = ttk.Label(self, image=logo_photo)
-                self.logo_label.image = logo_photo  # Keep a reference
-                self.logo_label.pack(pady=(40, 5))
-        except Exception as e:
-            print(f"Could not load logo: {e}")
 
     def open_help_url(self):
         """Open the help URL in the default browser"""
