@@ -33,13 +33,13 @@ import math
 import webbrowser
 from PIL import Image, ImageTk
 
-from spectrometer import config, CCDserial, CCDfiles, widgets
+from spectrometer import CCDplots, config, CCDserial, CCDfiles, widgets
 from spectrometer.calibration import default_calibration
 from utils import plotgraph
 
 
 class BuildPanel(ttk.Frame):
-    def __init__(self, master, CCDplot, SerQueue):
+    def __init__(self, master, CCDplot: CCDplots.BuildPlot, SerQueue):
         # geometry-rows for packing the grid
         progress_var = tk.IntVar()
 
@@ -58,7 +58,6 @@ class BuildPanel(ttk.Frame):
         self.comparison_filename = None
 
         # Create all widgets and space between them
-        self.mode_fields()
         self.collectfields(SerQueue, progress_var)
         self.saveopenfields(CCDplot)
         self.toolbuttons()
@@ -67,80 +66,6 @@ class BuildPanel(ttk.Frame):
         self.plotmodefields(CCDplot)
         self.CCDparamfields()
         # self.updateplotfields(CCDplot)
-
-    def mode_fields(self):
-        """Add spectroscopy mode toggle"""
-        self.operation_mode_frame = ttk.Frame(self)
-        self.operation_mode_frame.pack(fill=tk.X, padx=5, pady=5)
-
-        self.mode_var = tk.IntVar(value=0)  # 0 = Regular, 1 = Spectroscopy
-
-        self.r_regular = ttk.Radiobutton(
-            self.operation_mode_frame,
-            text="Regular Mode",
-            variable=self.mode_var,
-            value=0,
-            command=self.mode_changed,
-        )
-        self.r_regular.pack(side=tk.LEFT, padx=5)
-
-        self.r_spectroscopy = ttk.Radiobutton(
-            self.operation_mode_frame,
-            text="Spectroscopy Mode",
-            variable=self.mode_var,
-            value=1,
-            command=self.mode_changed,
-        )
-        self.r_spectroscopy.pack(side=tk.LEFT, padx=5)
-
-    def mode_changed(self):
-        """Handle mode switching"""
-        config.spectroscopy_mode = bool(self.mode_var.get())
-
-        if config.spectroscopy_mode:
-            # Auto-open calibration window in spectroscopy mode
-            default_calibration.open_calibration_window(
-                self.master, on_apply_callback=self.CCDplot.replot_current_spectrum
-            )
-
-        # Update the plot immediately with the correct axis
-        self.update_plot_axis()
-
-        # Update spectrum colors when mode changes
-        self.CCDplot.set_show_colors(self.show_colors.get())
-        self.CCDplot.canvas.draw()
-
-    def update_plot_axis(self):
-        """Update the plot axis based on current mode"""
-        if hasattr(self.CCDplot, "a") and self.CCDplot.a is not None:
-            if config.spectroscopy_mode:
-                # Use wavelength calibration for spectroscopy mode
-                if hasattr(default_calibration, "apply") and callable(
-                    default_calibration.apply
-                ):
-                    x_values = default_calibration.apply(np.arange(3694))
-                    x_label = "Wavelength (nm)"
-                    # Normal direction: lower wavelengths on left, higher on right
-                    self.CCDplot.a.set_xlim(
-                        x_values[0], x_values[-1]
-                    )  # Normal direction
-                else:
-                    # Fallback to pixels if no calibration
-                    x_values = np.arange(3694)
-                    x_label = "Pixelnumber (No Calibration)"
-                    self.CCDplot.a.set_xlim(x_values[0], x_values[-1])  # Normal
-            else:
-                # Use pixel numbers for regular mode
-                x_values = np.arange(3694)
-                x_label = "Pixelnumber"
-                self.CCDplot.a.set_xlim(x_values[0], x_values[-1])  # Normal
-
-            # Update the axis label
-            self.CCDplot.a.set_xlabel(x_label)
-
-            # Redraw the canvas
-            if hasattr(self.CCDplot, "canvas"):
-                self.CCDplot.canvas.draw()
 
     def devicefields(self):
         # device setup - variables, widgets and traces associated with the device entrybox
@@ -646,7 +571,7 @@ class BuildPanel(ttk.Frame):
             CCDplot.a.set_ylim(-10, 4095)
 
         # Update spectrum background
-        self.CCDplot.set_show_colors(self.show_colors.get())
+        self.CCDplot.set_show_colors(CCDplot.show_colors.get())
 
         # If regression toggle is active, compute and plot interpolated curve
         try:
@@ -763,7 +688,7 @@ class BuildPanel(ttk.Frame):
 
     def toggle_spectrum_colors(self):
         """Toggle the spectrum color background"""
-        self.CCDplot.set_show_colors(self.show_colors.get())
+        self.CCDplot.set_show_colors(self.CCDplot.show_colors.get())
 
     def collectmodefields(self):
         # collect mode - variables, widgets and traces associated with the collect mode
@@ -860,15 +785,10 @@ class BuildPanel(ttk.Frame):
         )
         self.progress.pack(pady=5)
 
-    def plotmodefields(self, CCDplot):
+    def plotmodefields(self, CCDplot: CCDplots.BuildPlot):
         # plot mode - variables, widgets and traces associated with the plot mode
         plot_frame = widgets.CollapsibleTTK(self, title="Plot Options")
         plot_frame.pack(fill=tk.X, pady=5)
-
-        # variables
-        self.invert = tk.IntVar()
-        self.balanced = tk.IntVar()
-        self.show_colors = tk.IntVar()
 
         plot_label_row = ttk.Frame(plot_frame.sub_frame)
         plot_label_row.pack(fill=tk.X)
@@ -876,7 +796,7 @@ class BuildPanel(ttk.Frame):
         self.cinvert = ttk.Checkbutton(
             plot_frame.sub_frame,
             text="Invert data",
-            variable=self.invert,
+            variable=CCDplot.invert,
             onvalue=1,
             offvalue=0,
         )
@@ -885,7 +805,7 @@ class BuildPanel(ttk.Frame):
         self.cbalance = ttk.Checkbutton(
             plot_frame.sub_frame,
             text="Balance even/odd pixels",
-            variable=self.balanced,
+            variable=CCDplot.balanced,
             onvalue=1,
             offvalue=0,
             state=tk.DISABLED,
@@ -907,22 +827,22 @@ class BuildPanel(ttk.Frame):
         self.cshowcolors = ttk.Checkbutton(
             plot_frame.sub_frame,
             text="Show colours",
-            variable=self.show_colors,
+            variable=CCDplot.show_colors,
             onvalue=1,
             offvalue=0,
             command=self.toggle_spectrum_colors,
         )
         self.cshowcolors.pack(anchor=tk.W)
 
-        self.invert.trace_add(
+        CCDplot.invert.trace_add(
             "write",
-            lambda name, index, mode, invert=self.invert, CCDplot=CCDplot: self.RAWcallback(
+            lambda name, index, mode, invert=CCDplot.invert, CCDplot=CCDplot: self.RAWcallback(
                 name, index, mode, invert, CCDplot
             ),
         )
-        self.balanced.trace_add(
+        CCDplot.balanced.trace_add(
             "write",
-            lambda name, index, mode, balanced=self.balanced, CCDplot=CCDplot: self.BALcallback(
+            lambda name, index, mode, balanced=CCDplot.balanced, CCDplot=CCDplot: self.BALcallback(
                 name, index, mode, balanced, CCDplot
             ),
         )
@@ -935,10 +855,10 @@ class BuildPanel(ttk.Frame):
         )
 
         # set initial state
-        self.invert.set(config.datainvert)
-        self.balanced.set(config.balanced)
+        CCDplot.invert.set(config.datainvert)
+        CCDplot.balanced.set(config.balanced)
         self.mirror.set(config.datamirror)
-        self.show_colors.set(0)
+        CCDplot.show_colors.set(0)
 
         # Regression controls
         regression_frame = ttk.Frame(plot_frame.sub_frame)
