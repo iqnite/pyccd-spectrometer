@@ -28,11 +28,9 @@ import os
 import tkinter as tk
 from tkinter import ttk, colorchooser
 import numpy as np
-import serial
-import math
 from PIL import Image, ImageTk
 
-from spectrometer import CCDplots, config, CCDserial, CCDfiles, widgets
+from spectrometer import CCDplots, config, CCDserial, CCDfiles
 from spectrometer.calibration import default_calibration
 from utils import plotgraph
 
@@ -303,13 +301,13 @@ class BuildPanel(ttk.Frame):
 
     def collectmodefields(self):
         # collect mode - variables, widgets and traces associated with the collect mode
-        collect_frame = widgets.CollapsibleTTK(self, title="Collection Options")
+        collect_frame = ttk.Frame(self)
         collect_frame.pack(fill=tk.X, pady=5)
 
         # variables
         self.CONTvar = tk.IntVar()
 
-        mode_row = ttk.Frame(collect_frame.sub_frame)
+        mode_row = ttk.Frame(collect_frame)
         mode_row.pack(fill=tk.X)
 
         self.roneshot = ttk.Radiobutton(
@@ -334,7 +332,7 @@ class BuildPanel(ttk.Frame):
         self.CONTvar.set(config.AVGn[0])
 
         # average - variables, widgets and traces associated with the average slider
-        avg_frame = ttk.Frame(collect_frame.sub_frame)
+        avg_frame = ttk.Frame(collect_frame)
         avg_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=5)
 
         avg_row = ttk.Frame(avg_frame)
@@ -398,14 +396,14 @@ class BuildPanel(ttk.Frame):
 
     def plotmodefields(self, CCDplot: CCDplots.BuildPlot):
         # plot mode - variables, widgets and traces associated with the plot mode
-        plot_frame = widgets.CollapsibleTTK(self, title="Plot Options")
+        plot_frame = ttk.Frame(self)
         plot_frame.pack(fill=tk.X, pady=5)
 
-        plot_label_row = ttk.Frame(plot_frame.sub_frame)
+        plot_label_row = ttk.Frame(plot_frame)
         plot_label_row.pack(fill=tk.X)
 
         self.cinvert = ttk.Checkbutton(
-            plot_frame.sub_frame,
+            plot_frame,
             text="Invert data",
             variable=CCDplot.invert,
             onvalue=1,
@@ -414,7 +412,7 @@ class BuildPanel(ttk.Frame):
         self.cinvert.pack(anchor=tk.W)
 
         self.cbalance = ttk.Checkbutton(
-            plot_frame.sub_frame,
+            plot_frame,
             text="Balance even/odd pixels",
             variable=CCDplot.balanced,
             onvalue=1,
@@ -426,7 +424,7 @@ class BuildPanel(ttk.Frame):
         # Mirror left/right
         self.mirror = tk.IntVar()
         self.cmirror = ttk.Checkbutton(
-            plot_frame.sub_frame,
+            plot_frame,
             text="Mirror data",
             variable=self.mirror,
             onvalue=1,
@@ -436,7 +434,7 @@ class BuildPanel(ttk.Frame):
 
         # Show colors checkbox
         self.cshowcolors = ttk.Checkbutton(
-            plot_frame.sub_frame,
+            plot_frame,
             text="Show colours",
             variable=CCDplot.show_colors,
             onvalue=1,
@@ -469,10 +467,10 @@ class BuildPanel(ttk.Frame):
         CCDplot.invert.set(config.datainvert)
         CCDplot.balanced.set(config.balanced)
         self.mirror.set(config.datamirror)
-        CCDplot.show_colors.set(0)
+        CCDplot.show_colors.set(False)
 
         # Regression controls
-        regression_frame = ttk.Frame(plot_frame.sub_frame)
+        regression_frame = ttk.Frame(plot_frame)
         regression_frame.pack(fill=tk.X, pady=5)
 
         self.ph_checkbox_var = tk.IntVar(value=0)
@@ -603,7 +601,7 @@ class BuildPanel(ttk.Frame):
                 try:
                     resample = Image.Resampling.LANCZOS
                 except Exception:
-                    resample = Image.LANCZOS
+                    resample = Image.LANCZOS  # type: ignore for older Pillow versions
                 icon_image = icon_solid.resize(target_size, resample)
                 icon_photo = ImageTk.PhotoImage(icon_image)
 
@@ -615,7 +613,7 @@ class BuildPanel(ttk.Frame):
                     bd=0,
                     cursor="hand2",  # Show hand cursor to indicate it's clickable
                 )
-                self.icon_overlay.image = icon_photo
+                self.icon_overlay.image = icon_photo  # type: ignore to prevent garbage collection
                 self.icon_overlay.place(relx=0.5, rely=0.5, anchor="center")
 
                 # Make the overlay pass click events to the button underneath
@@ -807,7 +805,7 @@ class BuildPanel(ttk.Frame):
             # Show filename and remove button
             filename_label = ttk.Label(
                 self.compare_info_frame,
-                text=self.comparison_filename,
+                text=self.comparison_filename or "",
                 font=("Avenir", 9),
             )
             filename_label.pack(side=tk.LEFT, padx=5)
@@ -1069,7 +1067,7 @@ class BuildPanel(ttk.Frame):
                 try:
                     resample = Image.Resampling.LANCZOS
                 except Exception:
-                    resample = Image.LANCZOS
+                    resample = Image.LANCZOS  # type: ignore for older Pillow versions
                 icon_image = icon_solid.resize(target_size, resample)
                 icon_photo = ImageTk.PhotoImage(icon_image)
 
@@ -1081,7 +1079,7 @@ class BuildPanel(ttk.Frame):
                     bd=0,
                     cursor="hand2",
                 )
-                self.icon_overlay.image = icon_photo
+                self.icon_overlay.image = icon_photo  # type: ignore to prevent garbage collection
                 self.icon_overlay.place(relx=0.5, rely=0.5, anchor="center")
                 self.icon_overlay.bind("<Button-1>", lambda e: self.open_color_picker())
 
@@ -1115,7 +1113,7 @@ class BuildPanel(ttk.Frame):
                     bd=0,
                     cursor="hand2",
                 )
-                self.icon_overlay_zoom.image = icon_photo_zoom
+                self.icon_overlay_zoom.image = icon_photo_zoom  # type: ignore to prevent garbage collection
                 self.icon_overlay_zoom.place(relx=0.5, rely=0.5, anchor="center")
                 self.icon_overlay_zoom.bind("<Button-1>", lambda e: self.save_figure())
 
@@ -1149,7 +1147,7 @@ class BuildPanel(ttk.Frame):
                     bd=0,
                     cursor="hand2",
                 )
-                self.icon_overlay_save.image = icon_photo_save
+                self.icon_overlay_save.image = icon_photo_save  # type: ignore to prevent garbage collection
                 self.icon_overlay_save.place(relx=0.5, rely=0.5, anchor="center")
                 self.icon_overlay_save.bind("<Button-1>", lambda e: self.zoom_mode())
         except Exception as e:
