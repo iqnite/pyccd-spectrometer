@@ -401,7 +401,7 @@ class BuildPanel(ttk.Frame):
         config.AVGn[1] = np.uint8(self.AVGscale.get())
         self.AVGlabel.config(text=str(config.AVGn[1]))
 
-    def RAWcallback(self, name, index, mode, invert, CCDplot):
+    def RAWcallback(self, name, index, mode, invert, CCDplot: CCDplots.BuildPlot):
         config.datainvert = invert.get()
         if config.datainvert == 0:
             self.cbalance.config(state=tk.DISABLED)
@@ -409,12 +409,12 @@ class BuildPanel(ttk.Frame):
             self.cbalance.config(state=tk.NORMAL)
         self.updateplot(CCDplot)
 
-    def MIRcallback(self, name, index, mode, mirror, CCDplot):
+    def MIRcallback(self, name, index, mode, mirror, CCDplot: CCDplots.BuildPlot):
         """Callback when mirror checkbox changes"""
         config.datamirror = mirror.get()
         self.updateplot(CCDplot)
 
-    def BALcallback(self, name, index, mode, balanced, CCDplot):
+    def BALcallback(self, name, index, mode, balanced, CCDplot: CCDplots.BuildPlot):
         config.balanced = balanced.get()
         self.updateplot(CCDplot)
 
@@ -477,7 +477,7 @@ class BuildPanel(ttk.Frame):
                 status.set("Port not found")
                 colr.configure(fg="#ffc200")
 
-    def updateplot(self, CCDplot):
+    def updateplot(self, CCDplot: CCDplots.BuildPlot):
         # This subtracts the ADC-pixel from ADC-dark
         if config.datainvert == 1:
             config.pltData16 = (
@@ -928,7 +928,7 @@ class BuildPanel(ttk.Frame):
 
         self.opacity_scale.set(100)
 
-    def saveopenfields(self, CCDplot):
+    def saveopenfields(self, CCDplot: CCDplots.BuildPlot):
         # setup save/open buttons
         file_container = ttk.Frame(self)
         file_container.pack(fill=tk.X)
@@ -1296,7 +1296,7 @@ class BuildPanel(ttk.Frame):
         if hasattr(self.CCDplot, "navigation_toolbar"):
             self.CCDplot.navigation_toolbar.save_figure()
 
-    def updateplotfields(self, CCDplot):
+    def updateplotfields(self, CCDplot: CCDplots.BuildPlot):
         self.bupdate = ttk.Button(
             self,
             text="Update plot",
