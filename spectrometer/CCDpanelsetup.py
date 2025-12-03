@@ -188,7 +188,7 @@ class BuildPanel(ttk.Frame):
             CCDplot.a.set_ylim(-10, 4095)
 
         # Update spectrum background
-        self.CCDplot.set_show_colors(CCDplot.show_colors.get())
+        self.CCDplot.set_show_colors(self.CCDplot.show_colors.get())
 
         # If regression toggle is active, compute and plot interpolated curve
         try:
