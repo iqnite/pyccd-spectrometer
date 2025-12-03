@@ -480,6 +480,7 @@ class BuildPanel(ttk.Frame):
             variable=self.ph_checkbox_var,
             onvalue=1,
             offvalue=0,
+            style="Toggle.Switch.TCheckbutton",
         )
         self.ph_check.pack(anchor=tk.W, padx=5)
 
