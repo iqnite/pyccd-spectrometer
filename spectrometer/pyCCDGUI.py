@@ -53,7 +53,7 @@ SerQueue = queue.Queue()
 # Build menu, plot frame, and control panel
 plot_grid = ttk.Frame(root)
 CCDplot = CCDplots.BuildPlot(plot_grid)
-header_panel = HeaderPanel(root, CCDplot, SerQueue)
+header_panel = HeaderPanel(root, CCDplot)
 right_panel = CCDpanelsetup.BuildPanel(plot_grid, header_panel, CCDplot, SerQueue)
 
 # Configure root window for expansion

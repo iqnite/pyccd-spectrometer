@@ -16,7 +16,7 @@ from spectrometer.calibration import default_calibration
 
 
 class HeaderPanel(ttk.Frame):
-    def __init__(self, master, CCDplot: CCDplots.BuildPlot, SerQueue):
+    def __init__(self, master, CCDplot: CCDplots.BuildPlot):
         super().__init__(master)
 
         # Store CCDplot reference for callbacks
@@ -471,7 +471,7 @@ class HeaderPanel(ttk.Frame):
         try:
             config.SHperiod = np.uint32(int(SH.get()))
             config.ICGperiod = np.uint32(int(ICG.get()))
-        except:
+        except (ValueError, TypeError):
             print("SH or ICG not an integer")
 
         if config.SHperiod < 1:
