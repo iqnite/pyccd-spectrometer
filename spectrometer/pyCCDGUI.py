@@ -2,11 +2,13 @@ import tkinter as tk
 import queue
 import os
 import sys
+from tkinter import ttk
 from typing import cast
 from PIL import Image, ImageTk
 
 import sv_ttk
 from spectrometer import CCDpanelsetup, CCDplots
+from spectrometer.header import HeaderPanel
 
 root = tk.Tk()
 root.title("pySPEC")
@@ -49,17 +51,22 @@ enter_fullscreen()
 SerQueue = queue.Queue()
 
 # Build menu, plot frame, and control panel
-CCDplot = CCDplots.BuildPlot(root)
-panel = CCDpanelsetup.BuildPanel(root, CCDplot, SerQueue)
+plot_grid = ttk.Frame(root)
+CCDplot = CCDplots.BuildPlot(plot_grid)
+header_panel = HeaderPanel(root, CCDplot)
+right_panel = CCDpanelsetup.BuildPanel(plot_grid, header_panel, CCDplot, SerQueue)
 
 # Configure root window for expansion
-root.grid_rowconfigure(0, weight=1)
-root.grid_columnconfigure(0, weight=1)  # Plot column expands
-root.grid_columnconfigure(1, weight=0)  # Panel column fixed
+plot_grid.grid_rowconfigure(0, weight=1)
+plot_grid.grid_rowconfigure(1, weight=0)
+plot_grid.grid_columnconfigure(0, weight=1)  # Plot column expands
+plot_grid.grid_columnconfigure(1, weight=0)  # Panel column fixed
 
 # Place widgets with proper expansion
+header_panel.pack(fill="x", side="top", padx=5, pady=5)
+plot_grid.pack(fill="both", expand=True)
 CCDplot.grid(row=0, column=0, sticky="nsew")
-panel.grid(row=0, column=1, sticky="ns", padx=(35, 0))
+right_panel.grid(row=0, column=1, sticky="ns", padx=(35, 2))
 
 
 def main():

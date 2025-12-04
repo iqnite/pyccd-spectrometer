@@ -1,7 +1,8 @@
 import numpy as np
 
 # serial definitions
-port = "COM5"
+port = "COM5"  # RX port (receiving data from device)
+port_tx = None  # TX port (transmitting commands to device, None means use same as port)
 baudrate = 115200
 
 # Data as the program handles

@@ -15,6 +15,10 @@ class BuildPlot(ttk.Frame):
     def __init__(self, master):
         super().__init__(master)
 
+        self.invert = tk.IntVar()
+        self.balanced = tk.IntVar()
+        self.show_colors = tk.BooleanVar()
+
         # Configure this frame to expand
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -42,7 +46,6 @@ class BuildPlot(ttk.Frame):
 
         # Store references for spectrum background updates
         self.spectroscopy_mode = config.spectroscopy_mode
-        self.show_colors = False
 
         # Connect mouse events
         self.connect_mouse_events()
@@ -68,14 +71,13 @@ class BuildPlot(ttk.Frame):
         try:
             # Get current settings
             current_spectroscopy_mode = config.spectroscopy_mode
-            current_show_colors = getattr(self, "show_colors", False)
+            current_show_colors = self.show_colors.get()
 
             # Always call the update function to handle axis changes and settings
             update_spectrum_background(
                 self.a, current_spectroscopy_mode, current_show_colors
             )
             self.spectroscopy_mode = current_spectroscopy_mode
-            self.show_colors = current_show_colors
 
         except Exception as e:
             print(f"Error updating spectrum background: {e}")
@@ -195,6 +197,6 @@ class BuildPlot(ttk.Frame):
 
     def set_show_colors(self, show_colors):
         """Update show_colors setting and refresh background"""
-        self.show_colors = show_colors
+        self.show_colors.set(show_colors)
         self.update_spectrum_background()
         self.canvas.draw_idle()
