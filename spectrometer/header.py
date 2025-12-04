@@ -251,6 +251,21 @@ class HeaderPanel(ttk.Frame):
         self.calculate_timings()
 
     def calculate_timings(self, *args):
+        """
+        Calculate and update timing parameters (SH-period and ICG-period) based on the user-specified exposure time.
+
+        Parameters:
+            *args: Optional arguments, not used directly but may be passed by Tkinter callbacks.
+
+        Behavior:
+            - Reads the exposure time and unit from GUI fields.
+            - Converts the exposure time to seconds.
+            - Calculates the SH-period and ICG-period using configuration values.
+            - Enforces minimum and maximum limits for SH-period.
+            - Updates configuration and GUI fields with the calculated values.
+            - Triggers validation and updates status indicators.
+            - Handles invalid input by displaying an error message in the GUI.
+        """
         try:
             tint_num = float(self.tint_value.get())
             unit = self.tint_unit.get()
