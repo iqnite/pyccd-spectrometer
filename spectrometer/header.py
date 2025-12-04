@@ -160,7 +160,7 @@ class HeaderPanel(ttk.Frame):
         self.port_frame.pack(side=tk.LEFT, padx=5, fill="y")
 
         # RX port
-        self.ldevice = ttk.Label(self.port_frame, text="RX/TX:")
+        self.ldevice = ttk.Label(self.port_frame, text="RX:")
         self.ldevice.grid(row=0, column=0, padx=5)
         self.edevice = ttk.Entry(
             self.port_frame, textvariable=self.device_address, width=7

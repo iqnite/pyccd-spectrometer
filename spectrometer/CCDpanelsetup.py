@@ -644,7 +644,7 @@ class BuildPanel(ttk.Frame):
 
         # Clean up reference when window is closed
         self.color_window.protocol(
-            "WM_DELETE_WINDOW", lambda: self.close_color_window()
+            "WM_DELETE_WINDOW", self.close_color_window
         )
 
         # Main plot color section
@@ -735,7 +735,7 @@ class BuildPanel(ttk.Frame):
             self.color_window,
             text="Apply & Close",
             style="Accent.TButton",
-            command=lambda: self.close_color_window(),
+            command=self.close_color_window,
         ).pack(pady=15)
 
     def load_comparison_data(self):
