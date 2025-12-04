@@ -483,6 +483,23 @@ class HeaderPanel(ttk.Frame):
         )
 
     def ICGSHcallback(self, name, index, mode, status, tint, colr, SH, ICG):
+        """
+        Callback to validate and update CCD timing configuration.
+
+        This method is typically used as a Tkinter variable trace callback to update
+        and validate the SH and ICG timing parameters for the CCD, and to update
+        the GUI status fields accordingly.
+
+        Parameters:
+            name (str): The name of the traced variable (required by Tkinter trace callbacks, may be unused).
+            index (str): The index of the traced variable (required by Tkinter trace callbacks, may be unused).
+            mode (str): The mode of the trace operation (required by Tkinter trace callbacks, may be unused).
+            status (tk.StringVar): StringVar to display the status message about CCD pulse timing.
+            tint (tk.StringVar): StringVar to display the calculated integration time.
+            colr (tk.Label): Label widget whose foreground color is updated to indicate status.
+            SH (tk.StringVar): StringVar containing the SH period value (as string).
+            ICG (tk.StringVar): StringVar containing the ICG period value (as string).
+        """
         try:
             config.SHperiod = np.uint32(int(SH.get()))
             config.ICGperiod = np.uint32(int(ICG.get()))
