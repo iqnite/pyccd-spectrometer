@@ -61,6 +61,8 @@ def rxtx(panel, SerQueue: queue.Queue, progress_var):
 
 
 def rxtxoncethread(panel, SerQueue: queue.Queue, progress_var):
+    ser_rx = None
+    ser_tx = None
     try:
         # Open RX port
         ser_rx = serial.Serial(config.port, config.baudrate)
@@ -121,9 +123,6 @@ def rxtxoncethread(panel, SerQueue: queue.Queue, progress_var):
             ser_tx.close()
         ser_rx.close()
 
-        # enable all buttons
-        panelwakeup(panel)
-
         if config.stopsignal == 0:
             # combine received bytes into 16-bit data
             for rxi in range(3694):
@@ -145,13 +144,17 @@ def rxtxoncethread(panel, SerQueue: queue.Queue, progress_var):
             "There's a problem with the specified serial connection.",
         )
 
+    finally:
+        panelwakeup(panel)
+        if ser_tx is not None and ser_tx != ser_rx:
+            ser_tx.close()
+        if ser_rx is not None:
+            ser_rx.close()
+
 
 def rxtxcontthread(panel, progress_var):
     # open serial port(s)
     try:
-        # Determine TX port (use RX port if TX port is not specified)
-        tx_port = config.port_tx if config.port_tx else config.port
-
         # Open RX port
         ser_rx = serial.Serial(config.port, config.baudrate)
 
@@ -200,7 +203,7 @@ def rxtxcontthread(panel, progress_var):
         # transmit everything at once (the USB-firmware does not work if all bytes are not transmittet in one go)
         ser_tx.write(config.txfull)
 
-        # loop to acquire and plot data continuously
+        # transmit everything at once (the USB-firmware does not work if all bytes are not transmitted in one go)
         while config.stopsignal == 0:
             # wait for the firmware to return data
             config.rxData8 = ser_rx.read(7388)
