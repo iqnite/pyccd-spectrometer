@@ -574,14 +574,14 @@ class BuildPanel(ttk.Frame):
                 pixels = np.arange(n)
                 intensities = data.astype(float)
 
-                # smoothing parameter from slider (map 0..100 -> 0.0..0.1)
+                # smoothing parameter from slider (map 0..20 -> 0.0..0.002)
                 try:
                     sval = float(self.ph_scale.get())
                 except Exception:
                     sval = 5.0
-                # Use finer mapping so small slider changes at the low end have
-                # a noticeable effect: divisor 1000 gives range 0.0..0.1
-                smooth = max(0.0, float(sval) / 1000.0)
+                # Use finer mapping for very precise control
+                # divisor 10000 gives range 0.0..0.002
+                smooth = max(0.0, float(sval) / 10000.0)
 
                 interp_fn, interp_kind = plotgraph.make_interpolator(pixels, intensities, method="spline", smooth=smooth)
                 xs_pix = np.linspace(pixels.min(), pixels.max(), 2000)
@@ -918,12 +918,14 @@ class BuildPanel(ttk.Frame):
         self.ph_scale = ttk.Scale(
             self,
             from_=0,
-            to=100,
+            to=20,
             orient=tk.HORIZONTAL,
             length=200,
             command=self._phslider_callback,
         )
         self.ph_scale.grid(column=1, row=save_row + 3, padx=5, pady=5, sticky="w")
+        # Bind to ButtonRelease to update plot only when slider is released
+        self.ph_scale.bind("<ButtonRelease-1>", self._phslider_release)
         # Use a tk.Label so we can change the foreground color when disabled
         self.ph_label = tk.Label(self, text="0", fg="#ffffff")
         self.ph_label.grid(column=2, row=save_row + 3, padx=5, pady=5, sticky="w")
@@ -1206,21 +1208,24 @@ class BuildPanel(ttk.Frame):
         # self.bupdate.grid(row=update_row, columnspan=3, sticky="EW", padx=5)
 
     def _phslider_callback(self, val):
-        """Internal callback for the placeholder slider to update the label."""
+        """Internal callback for the placeholder slider to update the label only."""
         try:
             v = float(val)
         except Exception:
             v = 0.0
-        # Map slider (0..100) to smoothing factor. Make mapping finer at low
-        # slider values by using a divisor of 1000 instead of 500.
-        smooth = v / 1000.0
+        # Map slider (0..20) to smoothing factor with finer control
+        # Using a divisor of 10000 for very fine adjustments
+        smooth = v / 10000.0
         # Show smoothing value with a bit more precision so weak smoothing is visible
         try:
-            self.ph_label.config(text=f"{smooth:.4f}")
+            self.ph_label.config(text=f"{smooth:.5f}")
         except Exception:
             # fallback to integer display
             self.ph_label.config(text=str(int(round(v))))
-        # If regression is enabled, update the plot so changes take effect immediately
+    
+    def _phslider_release(self, event):
+        """Called when user releases the regression slider - updates the plot."""
+        # If regression is enabled, update the plot
         try:
             if getattr(self, "ph_checkbox_var", None) and self.ph_checkbox_var.get() == 1:
                 try:
