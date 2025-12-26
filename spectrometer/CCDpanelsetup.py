@@ -137,6 +137,16 @@ class BuildPanel(ttk.Frame):
         """Handle mode switching"""
         config.spectroscopy_mode = bool(self.mode_var.get())
 
+        # Clear all markers and top axis completely when switching modes
+        self.CCDplot.clear_markers()
+        
+        # Force clear top axis to remove any artifacts
+        if hasattr(self.CCDplot, 'ax_top'):
+            self.CCDplot.ax_top.cla()  # Clear the axis
+            self.CCDplot.ax_top.set_xlabel('')
+            self.CCDplot.ax_top.set_xticks([])
+            self.CCDplot.ax_top.set_xticklabels([])
+
         if config.spectroscopy_mode:
             # Auto-open calibration window in spectroscopy mode
             default_calibration.open_calibration_window(
@@ -148,7 +158,10 @@ class BuildPanel(ttk.Frame):
 
         # Update spectrum colors when mode changes
         self.CCDplot.set_show_colors(self.show_colors.get())
+        
+        # Force redraw
         self.CCDplot.canvas.draw()
+        self.CCDplot.canvas.flush_events()
 
     def update_plot_axis(self):
         """Update the plot axis based on current mode"""

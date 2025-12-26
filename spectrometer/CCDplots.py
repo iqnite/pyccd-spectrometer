@@ -22,6 +22,12 @@ class BuildPlot(ttk.Frame):
         # Remove fixed figsize so it can expand
         self.f = Figure(dpi=100, tight_layout=True)
         self.a = self.f.add_subplot(111)
+        
+        # Create secondary x-axis at the top for markers
+        self.ax_top = self.a.twiny()
+        self.ax_top.set_xlabel('')
+        self.ax_top.set_xticks([])  # Start with no ticks
+        
         self.canvas = FigureCanvasTkAgg(self.f, master=self)
         self.canvas.draw()
 
@@ -44,6 +50,9 @@ class BuildPlot(ttk.Frame):
         self.spectroscopy_mode = config.spectroscopy_mode
         self.show_colors = False
 
+        # Storage for user-placed markers
+        self.markers = []  # List of (line, text) tuples
+
         # Connect mouse events
         self.connect_mouse_events()
 
@@ -60,7 +69,10 @@ class BuildPlot(ttk.Frame):
 
     def on_axis_change(self, event=None):
         """Called automatically when axis limits change"""
+        # Sync top axis limits with bottom axis
+        self.ax_top.set_xlim(self.a.get_xlim())
         self.update_spectrum_background()
+        self.update_axis_ticks()
         self.canvas.draw_idle()
 
     def update_spectrum_background(self):
@@ -82,7 +94,7 @@ class BuildPlot(ttk.Frame):
 
     def on_mouse_scroll(self, event):
         """Zoom with mouse wheel"""
-        if event.inaxes != self.a:
+        if event.inaxes != self.a and event.inaxes != self.ax_top:
             return
 
         base_scale = 1.1
@@ -117,17 +129,25 @@ class BuildPlot(ttk.Frame):
         # Apply new limits
         self.a.set_xlim(tuple(new_xlim))
         self.a.set_ylim(tuple(new_ylim))
+        
+        # Sync top axis
+        self.ax_top.set_xlim(tuple(new_xlim))
+        
         self.canvas.draw_idle()
 
     def on_mouse_press(self, event):
-        """Start panning on middle mouse button press"""
-        if event.inaxes != self.a:
+        """Start panning on middle mouse button press, add/remove markers"""
+        if event.inaxes != self.a and event.inaxes != self.ax_top:
             return
 
-        if event.button == 2:  # Middle mouse button
+        if event.button == 1:  # Left mouse button - add marker
+            self.add_marker(event.xdata)
+        elif event.button == 2:  # Middle mouse button
             self.pan_start = (event.xdata, event.ydata)
             self.xlim = self.a.get_xlim()
             self.ylim = self.a.get_ylim()
+        elif event.button == 3:  # Right mouse button - remove marker
+            self.remove_marker(event.xdata)
 
     def on_mouse_release(self, event):
         """Stop panning on mouse release"""
@@ -138,7 +158,7 @@ class BuildPlot(ttk.Frame):
 
     def on_mouse_motion(self, event):
         """Pan the graph when middle mouse button is held down"""
-        if self.pan_start is None or event.inaxes != self.a:
+        if self.pan_start is None or (event.inaxes != self.a and event.inaxes != self.ax_top):
             return
 
         dx = event.xdata - self.pan_start[0]
@@ -152,6 +172,10 @@ class BuildPlot(ttk.Frame):
         # Apply new limits
         self.a.set_xlim(new_xlim)
         self.a.set_ylim(new_ylim)
+        
+        # Sync top axis
+        self.ax_top.set_xlim(new_xlim)
+        
         self.canvas.draw_idle()
 
     def reset_view(self):
@@ -173,7 +197,18 @@ class BuildPlot(ttk.Frame):
             x_values = np.arange(len(ccd_data))
             x_label = "Pixel Number"
 
+        # Clear markers when plotting new spectrum
+        self.clear_markers()
+
         self.a.clear()
+        
+        # Recreate top axis to clear any artifacts
+        if hasattr(self, 'ax_top'):
+            self.ax_top.remove()
+        self.ax_top = self.a.twiny()
+        self.ax_top.set_xlabel('')
+        self.ax_top.set_xticks([])
+        
         self.a.plot(x_values, ccd_data, color="blue")
         self.a.set_xlabel(x_label)
         self.a.set_ylabel("Intensity")
@@ -197,4 +232,111 @@ class BuildPlot(ttk.Frame):
         """Update show_colors setting and refresh background"""
         self.show_colors = show_colors
         self.update_spectrum_background()
+        self.canvas.draw_idle()
+
+    def add_marker(self, x_pos):
+        """Add a vertical marker line at the specified x position"""
+        if x_pos is None:
+            return
+        
+        # Get current x-axis limits
+        xlim = self.a.get_xlim()
+        
+        # Validate x_pos is within bounds and not at the origin (likely a bug)
+        if x_pos < xlim[0] or x_pos > xlim[1]:
+            return
+        
+        # Ignore clicks very close to zero (likely unintended)
+        if abs(x_pos) < (xlim[1] - xlim[0]) * 0.001:
+            return
+
+        # Get y-axis limits to draw line from bottom to top
+        ylim = self.a.get_ylim()
+
+        # Create vertical line
+        line = self.a.axvline(x=x_pos, color="red", linewidth=1, linestyle="-", alpha=0.7)
+
+        # Determine label based on spectroscopy mode (without units)
+        if config.spectroscopy_mode:
+            label_text = f"{x_pos:.2f}"
+        else:
+            label_text = f"{int(x_pos)}"
+
+        # Store the marker (line, label, x_pos)
+        self.markers.append((line, label_text, x_pos))
+
+        # Update axis ticks to include this marker
+        self.update_axis_ticks()
+
+        # Redraw the canvas
+        self.canvas.draw_idle()
+
+    def remove_marker(self, x_pos):
+        """Remove the marker closest to the specified x position"""
+        if x_pos is None or not self.markers:
+            return
+
+        # Don't allow deletion when zoom or pan tool is active
+        if hasattr(self.navigation_toolbar, 'mode') and self.navigation_toolbar.mode:
+            return
+
+        # Find the closest marker
+        closest_marker = None
+        min_distance = float("inf")
+
+        for marker in self.markers:
+            line, label_text, marker_x = marker
+            distance = abs(marker_x - x_pos)
+            if distance < min_distance:
+                min_distance = distance
+                closest_marker = marker
+
+        # Remove if within reasonable distance (1% of x-axis range)
+        xlim = self.a.get_xlim()
+        threshold = abs(xlim[1] - xlim[0]) * 0.01
+
+        if closest_marker and min_distance < threshold:
+            line, label_text, marker_x = closest_marker
+            line.remove()
+            self.markers.remove(closest_marker)
+            self.update_axis_ticks()
+            self.canvas.draw_idle()
+
+    def update_axis_ticks(self):
+        """Update top x-axis ticks to show marker positions"""
+        if not self.markers:
+            # Clear top axis completely if no markers
+            self.ax_top.set_xticks([])
+            self.ax_top.set_xticklabels([])
+            return
+
+        # Sync the top axis limits with bottom axis
+        self.ax_top.set_xlim(self.a.get_xlim())
+        
+        # Set only marker positions on top axis
+        marker_positions = [x_pos for _, _, x_pos in self.markers]
+        marker_labels = [label_text for _, label_text, _ in self.markers]
+        
+        self.ax_top.set_xticks(marker_positions)
+        self.ax_top.set_xticklabels(marker_labels)
+        
+        # Color all marker tick labels red
+        for label in self.ax_top.get_xticklabels():
+            label.set_color('red')
+
+    def clear_markers(self):
+        """Remove all markers"""
+        for line, label_text, x_pos in self.markers:
+            line.remove()
+        self.markers.clear()
+        
+        # Completely clear top axis
+        if hasattr(self, 'ax_top'):
+            self.ax_top.cla()
+            self.ax_top.set_xlabel('')
+            self.ax_top.set_xticks([])
+            self.ax_top.set_xticklabels([])
+            # Re-sync limits
+            self.ax_top.set_xlim(self.a.get_xlim())
+        
         self.canvas.draw_idle()
