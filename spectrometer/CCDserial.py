@@ -27,6 +27,7 @@
 
 from tkinter import messagebox
 import serial
+import numpy as np
 
 from spectrometer import config
 import threading
@@ -78,6 +79,22 @@ def rxtxoncethread(panel, SerQueue, progress_var):
             ser.reset_output_buffer()
             time.sleep(0.01)
 
+        # Determine hardware vs software averaging
+        # Firmware supports max 15 averages, so for >15 we need software averaging
+        requested_avg = config.AVGn[1]
+        if requested_avg <= 15:
+            # Use hardware averaging only
+            hardware_avg = requested_avg
+            software_iterations = 1
+        else:
+            # Use max hardware averaging (15) and do multiple collections in software
+            hardware_avg = 15
+            software_iterations = int(np.ceil(requested_avg / 15.0))
+
+        # Accumulator for software averaging (use float32 to avoid overflow)
+        if software_iterations > 1:
+            accumulated_data = np.zeros(3694, dtype=np.float32)
+
         # Transmit key 'ER'
         config.txfull[0] = 69
         config.txfull[1] = 82
@@ -90,15 +107,28 @@ def rxtxoncethread(panel, SerQueue, progress_var):
         config.txfull[7] = (config.ICGperiod >> 16) & 0xFF
         config.txfull[8] = (config.ICGperiod >> 8) & 0xFF
         config.txfull[9] = config.ICGperiod & 0xFF
-        # averages to perfom
+        # averages to perfom (send hardware average count)
         config.txfull[10] = config.AVGn[0]
-        config.txfull[11] = config.AVGn[1]
+        config.txfull[11] = hardware_avg
 
-        # transmit everything at once (the USB-firmware does not work if all bytes are not transmitted in one go)
-        ser.write(config.txfull)
+        # Perform software averaging by collecting multiple times
+        for iteration in range(software_iterations):
+            if config.stopsignal != 0:
+                break
 
-        # wait for the firmware to return data
-        config.rxData8 = ser.read(7388)
+            # transmit everything at once (the USB-firmware does not work if all bytes are not transmitted in one go)
+            ser.write(config.txfull)
+
+            # wait for the firmware to return data
+            config.rxData8 = ser.read(7388)
+
+            # combine received bytes into 16-bit data
+            for rxi in range(3694):
+                value = (config.rxData8[2 * rxi + 1] << 8) + config.rxData8[2 * rxi]
+                if software_iterations > 1:
+                    accumulated_data[rxi] += value
+                else:
+                    config.rxData16[rxi] = value
 
         # close serial port
         ser.close()
@@ -107,11 +137,10 @@ def rxtxoncethread(panel, SerQueue, progress_var):
         panelwakeup(panel)
 
         if config.stopsignal == 0:
-            # combine received bytes into 16-bit data
-            for rxi in range(3694):
-                config.rxData16[rxi] = (
-                    config.rxData8[2 * rxi + 1] << 8
-                ) + config.rxData8[2 * rxi]
+            # If we did software averaging, compute the average
+            if software_iterations > 1:
+                for rxi in range(3694):
+                    config.rxData16[rxi] = np.uint16(np.round(accumulated_data[rxi] / software_iterations))
 
             # plot the new data
             panel.bupdate.invoke()
@@ -207,10 +236,25 @@ def rxtxcontthread(panel, progress_var):
 
 def progressthread(progress_var):
     progress_var.set(0)
+    
+    # Calculate total time considering software averaging
+    requested_avg = config.AVGn[1]
+    if requested_avg <= 15:
+        # Hardware averaging only
+        hardware_avg = requested_avg
+        software_iterations = 1
+    else:
+        # Software averaging with multiple collections
+        hardware_avg = 15
+        software_iterations = int(np.ceil(requested_avg / 15.0))
+    
+    # Total time is: ICGperiod * hardware_avg * software_iterations
+    total_time = config.ICGperiod * hardware_avg * software_iterations / config.MCLK
+    
     for i in range(1, 11):
         progress_var.set(i)
-        # wait 1/10th of the time the acquisition requires before adding to progress bar
-        time.sleep(config.ICGperiod * config.AVGn[1] / config.MCLK / 10)
+        # wait 1/10th of the total acquisition time before adding to progress bar
+        time.sleep(total_time / 10)
 
 
 def rxtxcancel(SerQueue):
