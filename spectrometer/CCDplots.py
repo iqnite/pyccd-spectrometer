@@ -2,6 +2,8 @@ import matplotlib
 import numpy as np
 import tkinter as tk
 from tkinter import ttk
+import json
+import os
 
 matplotlib.use("TkAgg")
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -51,7 +53,11 @@ class BuildPlot(ttk.Frame):
         self.show_colors = False
 
         # Storage for user-placed markers
-        self.markers = []  # List of (line, text) tuples
+        self.markers = []  # List of (line, label_text, x_pos, element_text_obj) tuples
+        self.element_matching_enabled = False
+        
+        # Load element emission lines data
+        self.emission_lines = self._load_emission_lines()
 
         # Connect mouse events
         self.connect_mouse_events()
@@ -253,8 +259,15 @@ class BuildPlot(ttk.Frame):
         # Get y-axis limits to draw line from bottom to top
         ylim = self.a.get_ylim()
 
+        # Determine color and elements based on element matching (if enabled and in spectroscopy mode)
+        element_matches = []
+        if self.element_matching_enabled and config.spectroscopy_mode:
+            color, element_matches = self._get_marker_color_and_elements(x_pos)
+        else:
+            color = "red"
+
         # Create vertical line
-        line = self.a.axvline(x=x_pos, color="red", linewidth=1, linestyle="-", alpha=0.7)
+        line = self.a.axvline(x=x_pos, color=color, linewidth=1, linestyle="-", alpha=0.7)
 
         # Determine label based on spectroscopy mode (without units)
         if config.spectroscopy_mode:
@@ -262,8 +275,35 @@ class BuildPlot(ttk.Frame):
         else:
             label_text = f"{int(x_pos)}"
 
-        # Store the marker (line, label, x_pos)
-        self.markers.append((line, label_text, x_pos))
+        # Add element name annotation if matches are >80%
+        element_text_obj = None
+        if element_matches:
+            # Create multi-line label with all matching elements (sorted best to worst)
+            element_labels = [elem for elem, pct in element_matches]
+            element_text = "\n".join(element_labels)
+            
+            # Position element name relative to top of figure (not graph)
+            # Use blended transform: x in data coordinates, y in axes coordinates
+            from matplotlib.transforms import blended_transform_factory
+            trans = blended_transform_factory(self.a.transData, self.a.transAxes)
+            
+            element_text_obj = self.a.text(
+                x_pos,
+                0.95,  # 95% from bottom in axes coordinates (near top of figure)
+                element_text,
+                rotation=0,
+                verticalalignment="top",
+                horizontalalignment="center",
+                fontsize=10,
+                fontweight="bold",
+                color=color,
+                transform=trans,
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=color, alpha=0.9),
+                clip_on=True,
+            )
+
+        # Store the marker (line, label, x_pos, element_text)
+        self.markers.append((line, label_text, x_pos, element_text_obj))
 
         # Update axis ticks to include this marker
         self.update_axis_ticks()
@@ -285,7 +325,7 @@ class BuildPlot(ttk.Frame):
         min_distance = float("inf")
 
         for marker in self.markers:
-            line, label_text, marker_x = marker
+            line, label_text, marker_x, element_text = marker
             distance = abs(marker_x - x_pos)
             if distance < min_distance:
                 min_distance = distance
@@ -296,8 +336,10 @@ class BuildPlot(ttk.Frame):
         threshold = abs(xlim[1] - xlim[0]) * 0.01
 
         if closest_marker and min_distance < threshold:
-            line, label_text, marker_x = closest_marker
+            line, label_text, marker_x, element_text = closest_marker
             line.remove()
+            if element_text:
+                element_text.remove()
             self.markers.remove(closest_marker)
             self.update_axis_ticks()
             self.canvas.draw_idle()
@@ -314,8 +356,8 @@ class BuildPlot(ttk.Frame):
         self.ax_top.set_xlim(self.a.get_xlim())
         
         # Set only marker positions on top axis
-        marker_positions = [x_pos for _, _, x_pos in self.markers]
-        marker_labels = [label_text for _, label_text, _ in self.markers]
+        marker_positions = [x_pos for _, _, x_pos, _ in self.markers]
+        marker_labels = [label_text for _, label_text, _, _ in self.markers]
         
         self.ax_top.set_xticks(marker_positions)
         self.ax_top.set_xticklabels(marker_labels)
@@ -326,8 +368,10 @@ class BuildPlot(ttk.Frame):
 
     def clear_markers(self):
         """Remove all markers"""
-        for line, label_text, x_pos in self.markers:
+        for line, label_text, x_pos, element_text in self.markers:
             line.remove()
+            if element_text:
+                element_text.remove()
         self.markers.clear()
         
         # Completely clear top axis
@@ -338,5 +382,122 @@ class BuildPlot(ttk.Frame):
             self.ax_top.set_xticklabels([])
             # Re-sync limits
             self.ax_top.set_xlim(self.a.get_xlim())
+        
+        self.canvas.draw_idle()
+
+    def _load_emission_lines(self):
+        """Load element emission lines from JSON file"""
+        try:
+            # Get the directory of the current file
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            json_path = os.path.join(current_dir, 'element_emission_lines.json')
+            
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+            
+            # Create list of (wavelength, element) tuples
+            wavelength_elements = []
+            for element, wavelengths in data.items():
+                for wavelength in wavelengths:
+                    wavelength_elements.append((wavelength, element))
+            
+            # Sort by wavelength
+            return sorted(wavelength_elements, key=lambda x: x[0])
+        except Exception as e:
+            print(f"Error loading emission lines: {e}")
+            return []
+
+    def _get_marker_color_and_elements(self, wavelength):
+        """Calculate marker color and element names based on proximity to known emission lines
+        
+        Returns: (color, list of (element_name, match_percentage) sorted by percentage desc)
+        """
+        if not self.emission_lines or not config.spectroscopy_mode:
+            return ('red', [])
+        
+        # Find all emission lines and calculate match percentages
+        element_matches = []
+        
+        for emission_wavelength, element in self.emission_lines:
+            distance = abs(wavelength - emission_wavelength)
+            
+            # Calculate match percentage based on distance
+            # 0 nm = 100%, 3 nm = 70%, >3 nm = <70%
+            if distance == 0:
+                match_percentage = 100
+            elif distance <= 3:
+                match_percentage = 100 - (distance / 3.0) * 30
+            else:
+                match_percentage = max(0, 70 - (distance - 3) * 10)
+            
+            # Only include matches >= 80%
+            if match_percentage >= 80:
+                element_matches.append((element, match_percentage, distance))
+        
+        # Sort by match percentage (highest first), then by distance if tied
+        element_matches.sort(key=lambda x: (-x[1], x[2]))
+        
+        # Determine color based on best match percentage
+        if element_matches:
+            best_match = element_matches[0][1]
+            if best_match >= 90:
+                color = 'green'
+            else:  # >= 80
+                color = '#ffc200'
+            
+            # Return color and list of (element, percentage) tuples
+            return (color, [(elem, pct) for elem, pct, _ in element_matches])
+        else:
+            return ('red', [])
+
+    def update_marker_colors(self, enabled):
+        """Update marker colors based on element matching setting"""
+        self.element_matching_enabled = enabled
+        
+        # Update colors even if not in spectroscopy mode (to reset to red)
+        if not self.markers:
+            return
+        
+        ylim = self.a.get_ylim()
+        
+        for i, (line, label_text, x_pos, old_element_text) in enumerate(self.markers):
+            # Remove old element text if it exists
+            if old_element_text:
+                old_element_text.remove()
+            
+            # Calculate new color and elements
+            element_text_obj = None
+            if enabled and config.spectroscopy_mode:
+                color, element_matches = self._get_marker_color_and_elements(x_pos)
+                
+                # Add element names if matches >80%
+                if element_matches:
+                    element_labels = [elem for elem, pct in element_matches]
+                    element_text = "\n".join(element_labels)
+                    
+                    from matplotlib.transforms import blended_transform_factory
+                    trans = blended_transform_factory(self.a.transData, self.a.transAxes)
+                    
+                    element_text_obj = self.a.text(
+                        x_pos,
+                        0.95,
+                        element_text,
+                        rotation=0,
+                        verticalalignment="top",
+                        horizontalalignment="center",
+                        fontsize=10,
+                        fontweight="bold",
+                        color=color,
+                        transform=trans,
+                        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=color, alpha=0.9),
+                        clip_on=True,
+                    )
+            else:
+                color = 'red'
+            
+            line.set_color(color)
+            
+            # Update marker with new element text
+            self.markers[i] = (line, label_text, x_pos, element_text_obj)
         
         self.canvas.draw_idle()
