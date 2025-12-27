@@ -53,8 +53,9 @@ class BuildPlot(ttk.Frame):
         self.show_colors = False
 
         # Storage for user-placed markers
-        self.markers = []  # List of (line, label_text, x_pos, element_text_obj) tuples
+        self.markers = []  # List of (line, label_text, x_pos, element_text_obj, label_text_obj) tuples
         self.element_matching_enabled = False
+        self.emission_line_color = "red"  # Default color for emission lines when not matched
         
         # Load element emission lines data
         self.emission_lines = self._load_emission_lines()
@@ -144,6 +145,10 @@ class BuildPlot(ttk.Frame):
     def on_mouse_press(self, event):
         """Start panning on middle mouse button press, add/remove markers"""
         if event.inaxes != self.a and event.inaxes != self.ax_top:
+            return
+
+        # Don't allow marker creation/deletion when zoom or pan tool is active
+        if hasattr(self.navigation_toolbar, 'mode') and self.navigation_toolbar.mode:
             return
 
         if event.button == 1:  # Left mouse button - add marker
@@ -261,10 +266,14 @@ class BuildPlot(ttk.Frame):
 
         # Determine color and elements based on element matching (if enabled and in spectroscopy mode)
         element_matches = []
-        if self.element_matching_enabled and config.spectroscopy_mode:
-            color, element_matches = self._get_marker_color_and_elements(x_pos)
+        if config.spectroscopy_mode:
+            if self.element_matching_enabled:
+                color, element_matches = self._get_marker_color_and_elements(x_pos)
+            else:
+                color = "#ff0000"
         else:
-            color = "red"
+            element_matches = []
+            color = self.emission_line_color
 
         # Create vertical line
         line = self.a.axvline(x=x_pos, color=color, linewidth=1, linestyle="-", alpha=0.7)
@@ -275,6 +284,25 @@ class BuildPlot(ttk.Frame):
         else:
             label_text = f"{int(x_pos)}"
 
+        # Add wavelength number annotation with styled box
+        from matplotlib.transforms import blended_transform_factory
+        trans = blended_transform_factory(self.a.transData, self.a.transAxes)
+        
+        label_text_obj = self.a.text(
+            x_pos,
+            0.98,  # 98% from bottom in axes coordinates (at the very top)
+            label_text,
+            rotation=0,
+            verticalalignment="top",
+            horizontalalignment="center",
+            fontsize=9,
+            color=color,
+            transform=trans,
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=color, alpha=0.9),
+            clip_on=True,
+            animated=False,
+        )
+
         # Add element name annotation if matches are >80%
         element_text_obj = None
         if element_matches:
@@ -282,14 +310,9 @@ class BuildPlot(ttk.Frame):
             element_labels = [elem for elem, pct in element_matches]
             element_text = "\n".join(element_labels)
             
-            # Position element name relative to top of figure (not graph)
-            # Use blended transform: x in data coordinates, y in axes coordinates
-            from matplotlib.transforms import blended_transform_factory
-            trans = blended_transform_factory(self.a.transData, self.a.transAxes)
-            
             element_text_obj = self.a.text(
                 x_pos,
-                0.95,  # 95% from bottom in axes coordinates (near top of figure)
+                0.90,  # 90% from bottom in axes coordinates (below wavelength number)
                 element_text,
                 rotation=0,
                 verticalalignment="top",
@@ -300,16 +323,18 @@ class BuildPlot(ttk.Frame):
                 transform=trans,
                 bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=color, alpha=0.9),
                 clip_on=True,
+                animated=False,
             )
 
-        # Store the marker (line, label, x_pos, element_text)
-        self.markers.append((line, label_text, x_pos, element_text_obj))
+        # Store the marker (line, label_text, x_pos, element_text_obj, label_text_obj)
+        self.markers.append((line, label_text, x_pos, element_text_obj, label_text_obj))
 
         # Update axis ticks to include this marker
         self.update_axis_ticks()
 
-        # Redraw the canvas
-        self.canvas.draw_idle()
+        # Force immediate redraw to ensure marker appears at all zoom levels
+        self.f.canvas.draw()
+        self.f.canvas.flush_events()
 
     def remove_marker(self, x_pos):
         """Remove the marker closest to the specified x position"""
@@ -325,7 +350,7 @@ class BuildPlot(ttk.Frame):
         min_distance = float("inf")
 
         for marker in self.markers:
-            line, label_text, marker_x, element_text = marker
+            line, label_text, marker_x, element_text, label_text_annotation = marker
             distance = abs(marker_x - x_pos)
             if distance < min_distance:
                 min_distance = distance
@@ -336,42 +361,37 @@ class BuildPlot(ttk.Frame):
         threshold = abs(xlim[1] - xlim[0]) * 0.01
 
         if closest_marker and min_distance < threshold:
-            line, label_text, marker_x, element_text = closest_marker
+            line, label_text, marker_x, element_text, label_text_annotation = closest_marker
             line.remove()
             if element_text:
                 element_text.remove()
+            if label_text_annotation:
+                label_text_annotation.remove()
             self.markers.remove(closest_marker)
             self.update_axis_ticks()
-            self.canvas.draw_idle()
+            self.canvas.draw()
+            self.canvas.flush_events()
 
     def update_axis_ticks(self):
-        """Update top x-axis ticks to show marker positions"""
-        if not self.markers:
-            # Clear top axis completely if no markers
-            self.ax_top.set_xticks([])
-            self.ax_top.set_xticklabels([])
+        """Keep the secondary axis aligned without showing duplicate labels."""
+        if not hasattr(self, 'ax_top') or self.ax_top is None:
             return
 
-        # Sync the top axis limits with bottom axis
+        # Always keep limits in sync with the main axis
         self.ax_top.set_xlim(self.a.get_xlim())
-        
-        # Set only marker positions on top axis
-        marker_positions = [x_pos for _, _, x_pos, _ in self.markers]
-        marker_labels = [label_text for _, label_text, _, _ in self.markers]
-        
-        self.ax_top.set_xticks(marker_positions)
-        self.ax_top.set_xticklabels(marker_labels)
-        
-        # Color all marker tick labels red
-        for label in self.ax_top.get_xticklabels():
-            label.set_color('red')
+
+        # Hide ticks/labels; annotations now handle displaying values
+        self.ax_top.set_xticks([])
+        self.ax_top.set_xticklabels([])
 
     def clear_markers(self):
         """Remove all markers"""
-        for line, label_text, x_pos, element_text in self.markers:
+        for line, label_text, x_pos, element_text, label_text_annotation in self.markers:
             line.remove()
             if element_text:
                 element_text.remove()
+            if label_text_annotation:
+                label_text_annotation.remove()
         self.markers.clear()
         
         # Completely clear top axis
@@ -383,7 +403,8 @@ class BuildPlot(ttk.Frame):
             # Re-sync limits
             self.ax_top.set_xlim(self.a.get_xlim())
         
-        self.canvas.draw_idle()
+        self.canvas.draw()
+        self.canvas.flush_events()
 
     def _load_emission_lines(self):
         """Load element emission lines from JSON file"""
@@ -460,44 +481,72 @@ class BuildPlot(ttk.Frame):
         
         ylim = self.a.get_ylim()
         
-        for i, (line, label_text, x_pos, old_element_text) in enumerate(self.markers):
+        for i, (line, label_text, x_pos, old_element_text, old_label_text_obj) in enumerate(self.markers):
             # Remove old element text if it exists
             if old_element_text:
                 old_element_text.remove()
+            # Remove old label text if it exists
+            if old_label_text_obj:
+                old_label_text_obj.remove()
             
             # Calculate new color and elements
             element_text_obj = None
-            if enabled and config.spectroscopy_mode:
-                color, element_matches = self._get_marker_color_and_elements(x_pos)
-                
-                # Add element names if matches >80%
-                if element_matches:
-                    element_labels = [elem for elem, pct in element_matches]
-                    element_text = "\n".join(element_labels)
-                    
-                    from matplotlib.transforms import blended_transform_factory
-                    trans = blended_transform_factory(self.a.transData, self.a.transAxes)
-                    
-                    element_text_obj = self.a.text(
-                        x_pos,
-                        0.95,
-                        element_text,
-                        rotation=0,
-                        verticalalignment="top",
-                        horizontalalignment="center",
-                        fontsize=10,
-                        fontweight="bold",
-                        color=color,
-                        transform=trans,
-                        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=color, alpha=0.9),
-                        clip_on=True,
-                    )
+            if config.spectroscopy_mode:
+                if enabled:
+                    color, element_matches = self._get_marker_color_and_elements(x_pos)
+
+                    # Add element names if matches >80%
+                    if element_matches:
+                        element_labels = [elem for elem, pct in element_matches]
+                        element_text = "\n".join(element_labels)
+
+                        from matplotlib.transforms import blended_transform_factory
+                        trans = blended_transform_factory(self.a.transData, self.a.transAxes)
+
+                        element_text_obj = self.a.text(
+                            x_pos,
+                            0.90,
+                            element_text,
+                            rotation=0,
+                            verticalalignment="top",
+                            horizontalalignment="center",
+                            fontsize=10,
+                            fontweight="bold",
+                            color=color,
+                            transform=trans,
+                            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=color, alpha=0.9),
+                            clip_on=True,
+                            animated=False,
+                        )
+                else:
+                    color = "#ff0000"
             else:
-                color = 'red'
+                color = self.emission_line_color
             
             line.set_color(color)
             
-            # Update marker with new element text
-            self.markers[i] = (line, label_text, x_pos, element_text_obj)
+            # Recreate label text annotation with new color
+            from matplotlib.transforms import blended_transform_factory
+            trans = blended_transform_factory(self.a.transData, self.a.transAxes)
+            
+            label_text_obj = self.a.text(
+                x_pos,
+                0.98,
+                label_text,
+                rotation=0,
+                verticalalignment="top",
+                horizontalalignment="center",
+                fontsize=9,
+                color=color,
+                transform=trans,
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=color, alpha=0.9),
+                clip_on=True,
+                animated=False,
+            )
+            
+            # Update marker with new element text and label text
+            self.markers[i] = (line, label_text, x_pos, element_text_obj, label_text_obj)
         
-        self.canvas.draw_idle()
+        self.canvas.draw()
+        self.canvas.flush_events()
+        self.canvas.flush_events()

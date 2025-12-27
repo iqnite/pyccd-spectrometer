@@ -25,7 +25,7 @@
 # SUCH DAMAGE.
 
 import tkinter as tk
-from tkinter import ttk, colorchooser
+from tkinter import ttk, colorchooser, messagebox
 import numpy as np
 import serial
 import math
@@ -59,6 +59,9 @@ class BuildPanel(ttk.Frame):
         self.main_plot_color = "#1f77b4"  # Default matplotlib blue
         self.regression_color = "#d62728"  # Default red
         self.compare_color = "#2ca02c"  # Default green for comparison data
+        self.emission_line_color = "red"  # Default red for emission lines (when not matched)
+        self.emission_color_button = None
+        self.emission_color_preview = None
         
         # Initialize comparison data storage
         self.comparison_data = None
@@ -145,6 +148,13 @@ class BuildPanel(ttk.Frame):
 
         # Update the plot immediately with the correct axis
         self.update_plot_axis()
+
+        # Remove any existing markers because axis scaling just changed
+        if hasattr(self, 'CCDplot') and hasattr(self.CCDplot, 'clear_markers'):
+            self.CCDplot.clear_markers()
+
+        # Update emission line color control availability
+        self.update_emission_color_controls()
 
         # Update spectrum colors when mode changes
         self.CCDplot.set_show_colors(self.show_colors.get())
@@ -574,14 +584,13 @@ class BuildPanel(ttk.Frame):
                 pixels = np.arange(n)
                 intensities = data.astype(float)
 
-                # smoothing parameter from slider (map 0..100 -> 0.0..0.1)
+                # smoothing parameter from slider (map 10..1000 -> 0.0001..0.01)
                 try:
                     sval = float(self.ph_scale.get())
                 except Exception:
-                    sval = 5.0
-                # Use finer mapping so small slider changes at the low end have
-                # a noticeable effect: divisor 1000 gives range 0.0..0.1
-                smooth = max(0.0, float(sval) / 1000.0)
+                    sval = 100.0
+                # Convert slider value to smoothing factor
+                smooth = max(0.0001, float(sval) / 100000.0)
 
                 interp_fn, interp_kind = plotgraph.make_interpolator(pixels, intensities, method="spline", smooth=smooth)
                 xs_pix = np.linspace(pixels.min(), pixels.max(), 2000)
@@ -917,13 +926,15 @@ class BuildPanel(ttk.Frame):
         self.lphslider.grid(column=0, row=save_row + 3, sticky="e")
         self.ph_scale = ttk.Scale(
             self,
-            from_=0,
-            to=100,
+            from_=10,
+            to=1000,
             orient=tk.HORIZONTAL,
             length=200,
             command=self._phslider_callback,
         )
         self.ph_scale.grid(column=1, row=save_row + 3, padx=5, pady=5, sticky="w")
+        # Update plot only when mouse is released to avoid lag during dragging
+        self.ph_scale.bind("<ButtonRelease-1>", lambda e, CCDplot=CCDplot: self._on_regression_release(CCDplot))
         # Use a tk.Label so we can change the foreground color when disabled
         self.ph_label = tk.Label(self, text="0", fg="#ffffff")
         self.ph_label.grid(column=2, row=save_row + 3, padx=5, pady=5, sticky="w")
@@ -980,9 +991,9 @@ class BuildPanel(ttk.Frame):
         self.color_window.title("Plot Colour Settings")
         self.color_window.resizable(False, False)
         
-        # Set window size and center it on screen (adjusted for compare data section)
+        # Set window size and center it on screen (adjusted for compare data and emission lines sections)
         window_width = 450
-        window_height = 520
+        window_height = 620
         screen_width = self.color_window.winfo_screenwidth()
         screen_height = self.color_window.winfo_screenheight()
         x = (screen_width - window_width) // 2
@@ -1026,6 +1037,33 @@ class BuildPanel(ttk.Frame):
             command=lambda: self.choose_plot_color("regression", self.color_window)
         ).pack(side=tk.LEFT, padx=5)
         
+        # Emission Lines color section
+        ttk.Label(self.color_window, text="Marking lines Colour:", font=("Avenir", 10, "bold")).pack(pady=(5, 5))
+        
+        emission_color_frame = ttk.Frame(self.color_window)
+        emission_color_frame.pack(pady=5)
+        
+        # Color preview for emission lines
+        self.emission_color_preview = tk.Canvas(
+            emission_color_frame,
+            width=40,
+            height=40,
+            bg=self.emission_line_color,
+            relief="solid",
+            borderwidth=1,
+        )
+        self.emission_color_preview.pack(side=tk.LEFT, padx=(10, 5))
+
+        self.emission_color_button = ttk.Button(
+            emission_color_frame,
+            text="Choose Colour",
+            style="Accent.TButton",
+            command=lambda: self.choose_plot_color("emission", self.color_window),
+        )
+        self.emission_color_button.pack(side=tk.LEFT, padx=5)
+
+        self.update_emission_color_controls()
+        
         # Separator
         ttk.Separator(self.color_window, orient="horizontal").pack(fill="x", pady=15)
         
@@ -1060,6 +1098,23 @@ class BuildPanel(ttk.Frame):
             style="Accent.TButton",
             command=lambda: self.close_color_window()
         ).pack(pady=15)
+
+    def update_emission_color_controls(self):
+        """Enable or disable emission line color controls based on current mode."""
+        button = getattr(self, "emission_color_button", None)
+        if button:
+            try:
+                if config.spectroscopy_mode:
+                    button.state(["disabled"])
+                else:
+                    button.state(["!disabled"])
+            except Exception:
+                try:
+                    button.configure(
+                        state=tk.DISABLED if config.spectroscopy_mode else tk.NORMAL
+                    )
+                except Exception:
+                    pass
 
     def load_comparison_data(self):
         """Load a .dat file for comparison"""
@@ -1167,28 +1222,52 @@ class BuildPanel(ttk.Frame):
 
     def choose_plot_color(self, plot_type, window):
         """Open color chooser dialog and update preview"""
+        if plot_type == "emission" and config.spectroscopy_mode:
+            try:
+                messagebox.showinfo(
+                    "Unavailable",
+                    "Marking line colour is only adjustable in Regular mode.",
+                    parent=getattr(self, 'color_window', None),
+                )
+            except Exception:
+                pass
+            return
+
         if plot_type == "main":
             current_color = self.main_plot_color
         elif plot_type == "regression":
             current_color = self.regression_color
+        elif plot_type == "emission":
+            current_color = self.emission_line_color
         else:  # compare
             current_color = self.compare_color
-            
+
         color = colorchooser.askcolor(color=current_color, title=f"Choose {plot_type} color")
-        
+
         if color[1]:  # If user didn't cancel
+            hex_color = color[1]
+
             if plot_type == "main":
-                self.main_plot_color = color[1]
+                self.main_plot_color = hex_color
                 self.main_color_preview.config(bg=self.main_plot_color)
+                self.updateplot(self.CCDplot)
             elif plot_type == "regression":
-                self.regression_color = color[1]
+                self.regression_color = hex_color
                 self.regression_color_preview.config(bg=self.regression_color)
-            else:  # compare
-                self.compare_color = color[1]
+                self.updateplot(self.CCDplot)
+            elif plot_type == "compare":
+                self.compare_color = hex_color
                 self.compare_color_preview.config(bg=self.compare_color)
-            
-            # Immediately update the plot with new color
-            self.updateplot(self.CCDplot)
+                self.updateplot(self.CCDplot)
+            else:  # emission in regular mode
+                self.emission_line_color = hex_color
+                if self.emission_color_preview:
+                    self.emission_color_preview.config(bg=self.emission_line_color)
+                # Update the emission line color in CCDplot and recolor existing markers
+                self.CCDplot.emission_line_color = hex_color
+                self.CCDplot.update_marker_colors(self.CCDplot.element_matching_enabled)
+                self.CCDplot.canvas.draw()
+
             # Close the window after color selection
             self.close_color_window()
 
@@ -1197,6 +1276,8 @@ class BuildPanel(ttk.Frame):
         if hasattr(self, 'color_window') and self.color_window and self.color_window.winfo_exists():
             self.color_window.destroy()
         self.color_window = None
+        self.emission_color_button = None
+        self.emission_color_preview = None
 
     def zoom_mode(self):
         """Activate zoom mode on the plot"""
@@ -1221,29 +1302,27 @@ class BuildPanel(ttk.Frame):
         # self.bupdate.grid(row=update_row, columnspan=3, sticky="EW", padx=5)
 
     def _phslider_callback(self, val):
-        """Internal callback for the placeholder slider to update the label."""
+        """Internal callback for the regression slider to update the label."""
         try:
             v = float(val)
         except Exception:
-            v = 0.0
-        # Map slider (0..100) to smoothing factor. Make mapping finer at low
-        # slider values by using a divisor of 1000 instead of 500.
-        smooth = v / 1000.0
-        # Show smoothing value with a bit more precision so weak smoothing is visible
+            v = 10.0
+        # Map slider (10..1000) to smoothing factor (0.0001..0.01)
+        smooth = v / 100000.0
+        # Show smoothing value with 5 decimal precision to see 0.00001 increments
         try:
-            self.ph_label.config(text=f"{smooth:.4f}")
+            self.ph_label.config(text=f"{smooth:.5f}")
         except Exception:
-            # fallback to integer display
-            self.ph_label.config(text=str(int(round(v))))
-        # If regression is enabled, update the plot so changes take effect immediately
-        try:
-            if getattr(self, "ph_checkbox_var", None) and self.ph_checkbox_var.get() == 1:
-                try:
-                    self.updateplot(self.CCDplot)
-                except Exception:
-                    pass
-        except Exception:
-            pass
+            # fallback to display
+            self.ph_label.config(text=f"{v:.0f}")
+    
+    def _on_regression_release(self, CCDplot):
+        """Update plot when regression slider is released."""
+        if getattr(self, "ph_checkbox_var", None) and self.ph_checkbox_var.get() == 1:
+            try:
+                self.updateplot(CCDplot)
+            except Exception:
+                pass
 
     def _ph_check_changed(self):
         """Enable or disable the placeholder slider based on the checkbox state
