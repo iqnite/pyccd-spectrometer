@@ -973,6 +973,37 @@ class BuildPanel(ttk.Frame):
             lambda *args: self.CCDplot.update_marker_colors(bool(self.element_match_var.get())),
         )
 
+        # Tolerance settings for emission line matching
+        tolerance_frame = ttk.Frame(self)
+        tolerance_frame.grid(column=0, row=save_row + 6, padx=(45, 5), pady=(10, 5), columnspan=3, sticky="w")
+        
+        # Green tolerance (exact match)
+        ttk.Label(tolerance_frame, text="Green:").grid(row=0, column=0, padx=(0, 2), sticky="e")
+        self.green_tolerance_var = tk.DoubleVar(value=config.green_tolerance_nm)
+        green_entry = ttk.Entry(tolerance_frame, textvariable=self.green_tolerance_var, width=6)
+        green_entry.grid(row=0, column=1, padx=2)
+        ttk.Label(tolerance_frame, text="nm").grid(row=0, column=2, padx=(0, 8), sticky="w")
+        
+        # Yellow tolerance (close match)
+        ttk.Label(tolerance_frame, text="Yellow:").grid(row=0, column=3, padx=2, sticky="e")
+        self.yellow_tolerance_var = tk.DoubleVar(value=config.yellow_tolerance_nm)
+        yellow_entry = ttk.Entry(tolerance_frame, textvariable=self.yellow_tolerance_var, width=6)
+        yellow_entry.grid(row=0, column=4, padx=2)
+        ttk.Label(tolerance_frame, text="nm").grid(row=0, column=5, padx=(0, 8), sticky="w")
+        
+        # Apply button in same row
+        ttk.Button(
+            tolerance_frame,
+            text="Apply",
+            command=self.apply_tolerance_settings,
+            style="Accent.TButton"
+        ).grid(row=0, column=6, padx=5)
+        
+        # Center the tolerance frame
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(2, weight=1)
+
     def open_calibration(self):
         """Open calibration window with proper callback reference"""
         default_calibration.open_calibration_window(
@@ -1098,6 +1129,30 @@ class BuildPanel(ttk.Frame):
             style="Accent.TButton",
             command=lambda: self.close_color_window()
         ).pack(pady=15)
+
+    def apply_tolerance_settings(self):
+        """Apply the tolerance settings and refresh the plot"""
+        try:
+            green_val = self.green_tolerance_var.get()
+            yellow_val = self.yellow_tolerance_var.get()
+            
+            # Validate inputs
+            if green_val <= 0 or yellow_val <= 0:
+                return
+            
+            if green_val >= yellow_val:
+                # Show warning that green should be less than yellow
+                return
+            
+            # Update config values
+            config.green_tolerance_nm = green_val
+            config.yellow_tolerance_nm = yellow_val
+            
+            # Refresh the plot to show updated colors
+            if config.spectroscopy_mode:
+                self.CCDplot.update_marker_colors(True)
+        except ValueError:
+            pass  # Invalid number, ignore
 
     def update_emission_color_controls(self):
         """Enable or disable emission line color controls based on current mode."""
@@ -1545,7 +1600,7 @@ class BuildPanel(ttk.Frame):
                 
                 self.logo_label = ttk.Label(self, image=logo_photo)
                 self.logo_label.image = logo_photo  # Keep a reference
-                self.logo_label.grid(row=about_row + 1, columnspan=3, pady=(40, 5), padx=(7,0))
+                self.logo_label.grid(row=about_row + 1, columnspan=3, pady=(15, 5), padx=(7,0))
         except Exception as e:
             print(f"Could not load logo: {e}")
 

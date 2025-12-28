@@ -11,6 +11,7 @@ a = Analysis(
         ('assets/palette.png', 'assets'),
         ('assets/save.png', 'assets'),
         ('assets/lens.png', 'assets'),
+        ('spectrometer/element_emission_lines.json', 'spectrometer'),
     ],
     hiddenimports=[],
     hookspath=[],

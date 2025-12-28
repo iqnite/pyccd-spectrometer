@@ -443,13 +443,19 @@ class BuildPlot(ttk.Frame):
             distance = abs(wavelength - emission_wavelength)
             
             # Calculate match percentage based on distance
-            # 0 nm = 100%, 3 nm = 70%, >3 nm = <70%
-            if distance == 0:
-                match_percentage = 100
-            elif distance <= 3:
-                match_percentage = 100 - (distance / 3.0) * 30
+            # Use configurable thresholds from config
+            green_threshold = config.green_tolerance_nm
+            yellow_threshold = config.yellow_tolerance_nm
+            
+            if distance <= green_threshold:
+                # Within green tolerance: 90-100% match
+                match_percentage = 100 - (distance / green_threshold) * 10
+            elif distance <= yellow_threshold:
+                # Within yellow tolerance: 80-90% match
+                match_percentage = 90 - ((distance - green_threshold) / (yellow_threshold - green_threshold)) * 10
             else:
-                match_percentage = max(0, 70 - (distance - 3) * 10)
+                # Beyond yellow tolerance, skip this element
+                continue
             
             # Only include matches >= 80%
             if match_percentage >= 80:

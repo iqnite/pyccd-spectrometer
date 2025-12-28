@@ -34,5 +34,9 @@ datamirror = 0
 spectroscopy_mode = False  # False = regular mode, True = spectroscopy mode
 CALIBRATION_COEFF = [0, 1, 0, 0]  # fallback linear
 
+# Emission line matching tolerance (in nm)
+green_tolerance_nm = 0.3  # Lines within this distance show as green (90-100% match)
+yellow_tolerance_nm = 3.0  # Lines within this distance show as yellow (80-89% match)
+
 min_sh = 20
 max_sh = 4294967295
