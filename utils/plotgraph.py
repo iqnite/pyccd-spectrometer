@@ -1,36 +1,15 @@
 #!/usr/bin/env python3
 """
-plot_lamp_filepicker.py
+plotgraph.py - A4 PDF Scientific Report Generator
+Generates 80s-style scientific report PDFs from TCD1304 spectroscopy data.
 
-Opens a file-picker dialog so you can choose a .dat (or other) file.
-Reads the selected TCD1304-style two-column file (pixel, ADC), estimates
-ADC_dark from dummy pixels, computes Ipixel = ADC_dark - ADC, creates an
-interpolated curve (uses scipy if available, otherwise numpy.interp fallback),
-and writes all outputs into a new folder next to the selected file.
-
-Output folder name (created next to the .dat file):
-    <original_filename_stem>_<creation-timestamp>
-
-The timestamp is the file system creation time of the selected file, formatted
-as YYYYMMDD_HHMMSS so it is safe in filenames.
-
-Files created inside that folder:
-  - <prefix>_Ipixel.csv                    (pixel, ADC, Ipixel)
-  - <prefix>_interpolated_sample.csv      (high-res sampled regression)
-  - <prefix>_plot.png                     (ADC + Ipixel plot with regression overlay)
-  - <prefix>_interpolator.pkl             (pickled interpolator object, optional)
-
-Usage:
-  - Double-click or run from CMD:
-      python plot_lamp_filepicker.py
-    A file dialog will open; pick your lamp.dat (or any .dat file).
-
-  - Or run and pass a path to skip the dialog:
-      python plot_lamp_filepicker.py "C:\\path\\to\\lamp.dat"
-
-Notes:
-  - If you prefer not to have a GUI, pass the file path as the first argument.
-  - Be careful when unpickling .pkl files from untrusted sources.
+Features:
+- A4 PDF output with black & white typewriter aesthetic
+- Logos: AstroLens (black) + pyspec icon
+- Metadata: date, name, ICG/SH period, exposure time, avg count, firmware
+- Raw mode graph (pixel vs ADC)
+- Spectroscopy mode graph (wavelength vs intensity)
+- Calibration table & calibration curve with 4 points
 """
 from __future__ import annotations
 import argparse
@@ -40,23 +19,34 @@ import os
 import csv
 import numpy as np
 import matplotlib
-
-matplotlib.use("Agg")  # safe backend for non-interactive use
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
-from scipy.interpolate import UnivariateSpline, interp1d
+from PIL import Image
+import json
+
+# Try to import reportlab for better PDF control (optional)
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.utils import ImageReader
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+    A4 = (595.276, 841.890)  # A4 in points
 
 
 def choose_file_with_dialog(initialdir: str | None = None) -> Path | None:
+    """Open a file dialog to select a .dat file"""
     try:
-        # Use tkinter filedialog to open a native file selection dialog
         import tkinter as tk
         from tkinter import filedialog
     except Exception:
         return None
     root = tk.Tk()
     root.withdraw()
-    # On Windows the dialog will be a native explorer-file dialog
     filetypes = [("DAT files", "*.dat"), ("All files", "*.*")]
     filename = filedialog.askopenfilename(
         title="Select .dat file", initialdir=initialdir or ".", filetypes=filetypes
@@ -69,6 +59,7 @@ def choose_file_with_dialog(initialdir: str | None = None) -> Path | None:
 
 
 def read_file_lines(filename: str):
+    """Read file with multiple encoding fallbacks"""
     encodings = ["utf-8", "cp1252", "latin-1"]
     for enc in encodings:
         try:
@@ -79,17 +70,182 @@ def read_file_lines(filename: str):
         except UnicodeDecodeError:
             continue
         except Exception as e:
-            # other I/O error -> raise
             raise
-    # fallback: binary decode with replacement
+    # Fallback: binary with replacement
     with open(filename, "rb") as f:
         raw = f.read()
     lines = raw.decode("utf-8", errors="replace").splitlines()
-    print("Opened file via binary fallback, decoded with errors='replace'.")
+    print("Opened file via binary fallback.")
     return lines
 
 
+def parse_metadata(lines):
+    """Extract metadata from header comments"""
+    metadata = {
+        'date': 'N/A',
+        'time': 'N/A',
+        'sample_name': 'Unknown',
+        'sh_period': 'N/A',
+        'icg_period': 'N/A',
+        'integration_time': 'N/A',
+        'firmware_avg': 'N/A',
+        'firmware_mclk': 'N/A',
+        'average_count': 'N/A',
+        'spectroscopy_mode': 'False',
+        'calibration_coeffs': None
+    }
+    
+    for line in lines:
+        line = line.strip()
+        if not line.startswith("#"):
+            continue
+            
+        # Parse date and time
+        if "#Date:" in line:
+            parts = line.split()
+            try:
+                date_idx = parts.index("#Date:") + 1
+                if date_idx < len(parts):
+                    metadata['date'] = parts[date_idx]
+                time_idx = next((i for i, p in enumerate(parts) if p == "Time:"), -1)
+                if time_idx > 0 and time_idx + 1 < len(parts):
+                    metadata['time'] = parts[time_idx + 1]
+            except:
+                pass
+        
+        # Parse sample name
+        if "#Sample-name:" in line:
+            parts = line.split()
+            try:
+                name_idx = parts.index("#Sample-name:") + 1
+                if name_idx < len(parts):
+                    metadata['sample_name'] = parts[name_idx]
+            except:
+                pass
+        
+        # Parse SH and ICG periods
+        if "#SH-period:" in line:
+            parts = line.split()
+            try:
+                sh_idx = parts.index("#SH-period:") + 1
+                if sh_idx < len(parts):
+                    metadata['sh_period'] = parts[sh_idx]
+                icg_idx = next((i for i, p in enumerate(parts) if p == "ICG-period:"), -1)
+                if icg_idx > 0 and icg_idx + 1 < len(parts):
+                    metadata['icg_period'] = parts[icg_idx + 1]
+                int_time_idx = next((i for i, p in enumerate(parts) if p == "time:"), -1)
+                if int_time_idx > 0 and int_time_idx + 1 < len(parts):
+                    metadata['integration_time'] = parts[int_time_idx + 1]
+            except:
+                pass
+        
+        # Parse firmware settings
+        if "#Firmware-settings:" in line:
+            parts = line.split()
+            try:
+                avg_idx = next((i for i, p in enumerate(parts) if p == "AVG:"), -1)
+                if avg_idx > 0 and avg_idx + 1 < len(parts):
+                    metadata['firmware_avg'] = parts[avg_idx + 1]
+                mclk_idx = next((i for i, p in enumerate(parts) if p == "MCLK:"), -1)
+                if mclk_idx > 0 and mclk_idx + 1 < len(parts):
+                    metadata['firmware_mclk'] = parts[mclk_idx + 1]
+            except:
+                pass
+        
+        # Parse average count
+        if "#Average-count:" in line:
+            parts = line.split()
+            try:
+                count_idx = parts.index("#Average-count:") + 1
+                if count_idx < len(parts):
+                    metadata['average_count'] = parts[count_idx]
+            except:
+                pass
+        
+        # Parse spectroscopy mode
+        if "#Spectroscopy-mode:" in line:
+            parts = line.split()
+            try:
+                mode_idx = parts.index("#Spectroscopy-mode:") + 1
+                if mode_idx < len(parts):
+                    metadata['spectroscopy_mode'] = parts[mode_idx]
+            except:
+                pass
+        
+        # Parse calibration coefficients
+        if "#Calibration-coefficients:" in line:
+            parts = line.split()
+            try:
+                coeff_idx = parts.index("#Calibration-coefficients:") + 1
+                if coeff_idx < len(parts):
+                    coeff_str = parts[coeff_idx]
+                    metadata['calibration_coeffs'] = [float(c) for c in coeff_str.split(',')]
+            except:
+                pass
+    
+    return metadata
+
+
+def format_time_with_unit(time_str):
+    """Format time value with the most convenient unit (µs, ms, or s)"""
+    try:
+        time_us = float(time_str)
+        
+        # Choose appropriate unit
+        if time_us >= 1000000:  # >= 1 second
+            value = time_us / 1000000
+            unit = 's'
+        elif time_us >= 1000:  # >= 1 millisecond
+            value = time_us / 1000
+            unit = 'ms'
+        else:  # microseconds
+            value = time_us
+            unit = 'µs'
+        
+        # Format with appropriate precision
+        if value >= 100:
+            formatted = f"{value:.1f}"
+        elif value >= 10:
+            formatted = f"{value:.2f}"
+        else:
+            formatted = f"{value:.3f}"
+        
+        return f"{formatted} {unit}"
+    except:
+        return f"{time_str} µs"  # Fallback to original with µs
+
+
+def format_time_with_unit(time_str):
+    """Format time value with the most convenient unit (µs, ms, or s)"""
+    try:
+        time_us = float(time_str)
+        
+        # Choose appropriate unit
+        if time_us >= 1000000:  # >= 1 second
+            value = time_us / 1000000
+            unit = 's'
+        elif time_us >= 1000:  # >= 1 millisecond
+            value = time_us / 1000
+            unit = 'ms'
+        else:  # microseconds
+            value = time_us
+            unit = 'µs'
+        
+        # Format with appropriate precision
+        if value >= 100:
+            formatted = f"{value:.1f}"
+        elif value >= 10:
+            formatted = f"{value:.2f}"
+        else:
+            formatted = f"{value:.3f}"
+        
+        return f"{formatted} {unit}"
+    except:
+        return f"{time_str} µs"  # Fallback to original with µs
+
+
 def parse_lines_to_arrays(lines):
+    """Parse data lines to pixel and ADC arrays"""
     pixels = []
     adcs = []
     for line in lines:
@@ -105,9 +261,7 @@ def parse_lines_to_arrays(lines):
         except Exception:
             try:
                 p = int("".join(ch for ch in parts[0] if (ch.isdigit() or ch == "-")))
-                a = float(
-                    "".join(ch for ch in parts[1] if (ch.isdigit() or ch in ".-eE"))
-                )
+                a = float("".join(ch for ch in parts[1] if (ch.isdigit() or ch in ".-eE")))
             except Exception:
                 continue
         pixels.append(p)
@@ -118,6 +272,7 @@ def parse_lines_to_arrays(lines):
 
 
 def estimate_dark(pixels: np.ndarray, adcs: np.ndarray, method: str = "median"):
+    """Estimate dark/baseline from dummy pixels"""
     mask = ((pixels >= 1) & (pixels <= 32)) | ((pixels >= 3679) & (pixels <= 3694))
     dark_vals = adcs[mask]
     if dark_vals.size == 0:
@@ -125,275 +280,304 @@ def estimate_dark(pixels: np.ndarray, adcs: np.ndarray, method: str = "median"):
         if n >= 64:
             dark_vals = np.concatenate((adcs[:32], adcs[-32:]))
         else:
-            dark_vals = adcs[: max(1, n // 10)]
+            dark_vals = adcs[:max(1, n // 10)]
     if method == "median":
         return float(np.median(dark_vals)), dark_vals
     else:
         return float(np.mean(dark_vals)), dark_vals
 
 
-def make_interpolator(
-    pixels: np.ndarray,
-    intensities: np.ndarray,
-    method: str = "spline",
-    smooth: float = 0.2,
-):
-    """Create an interpolator. `smooth` increases smoothing when using spline (larger -> smoother).
-
-    Returns (callable, description)
-    """
+def load_calibration_points():
+    """Load calibration points from calibration_params.json"""
     try:
-        if method == "spline":
-            # stronger smoothing by default: scale factor (user-controlled)
-            s = max(0.0, len(pixels) * np.var(intensities) * float(smooth))
-            spline = UnivariateSpline(pixels, intensities, s=s)
-            return spline, f"UnivariateSpline(s={s:.3g})"
-        else:
-            kind = "cubic" if method == "cubic" else "linear"
-            f = interp1d(
-                pixels,
-                intensities,
-                kind=kind,
-                bounds_error=False,
-                fill_value="extrapolate",  # type: ignore
-            )
-            return f, f"interp1d({kind})"
-    except Exception:
-
-        def lininterp(x):
-            return np.interp(x, pixels, intensities)
-
-        return lininterp, "numpy.interp(linear,fallback)"
+        if os.path.exists("calibration_params.json"):
+            with open("calibration_params.json", "r") as f:
+                data = json.load(f)
+                return data.get("points", [])
+    except:
+        pass
+    # Default 4-point calibration
+    return [
+        {"pixel": 0, "wavelength": 350.0},
+        {"pixel": 1231, "wavelength": 532.0},
+        {"pixel": 2462, "wavelength": 700.0},
+        {"pixel": 3693, "wavelength": 800.0}
+    ]
 
 
-def save_pixel_csv(
-    pixels: np.ndarray, adcs: np.ndarray, intensities: np.ndarray, out_csv: Path
-):
-    header = ["pixel", "ADC", "Ipixel"]
-    with out_csv.open("w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(header)
-        for p, a, i in zip(pixels, adcs, intensities):
-            w.writerow([int(p), float(a), float(i)])
+def apply_calibration(pixels, coeffs=None):
+    """Apply polynomial calibration to convert pixels to wavelengths"""
+    if coeffs is None:
+        # Load from calibration points
+        points = load_calibration_points()
+        pixel_vals = [p["pixel"] for p in points]
+        wavelength_vals = [p["wavelength"] for p in points]
+        coeffs = np.polyfit(pixel_vals, wavelength_vals, 3)
+    
+    polynomial = np.poly1d(coeffs)
+    return polynomial(pixels)
 
 
-def format_ctime_for_name(path: Path) -> str:
-    # Use filesystem creation time when available
+def load_and_convert_logo(logo_path, target_height=60, convert_yellow_to_white=False):
+    """Load logo and convert to pure black (remove any color)"""
     try:
-        ctime = path.stat().st_ctime
-    except Exception:
-        ctime = os.path.getctime(str(path))
-    dt = datetime.fromtimestamp(ctime)
-    return dt.strftime("%Y%m%d_%H%M%S")
+        img = Image.open(logo_path).convert("RGBA")
+        # Convert to grayscale, then to pure black/white
+        gray = img.convert("L")
+        
+        # If we need to convert yellow to white (for pyspec icon)
+        if convert_yellow_to_white:
+            img_rgb = Image.open(logo_path).convert("RGB")
+            pixels_rgb = img_rgb.load()
+            gray_pixels = gray.load()
+            # Convert yellow/bright colors to white in grayscale
+            for y in range(gray.size[1]):
+                for x in range(gray.size[0]):
+                    r, g, b = pixels_rgb[x, y]
+                    # Detect yellow-ish colors (high R and G, low B)
+                    if r > 180 and g > 150 and b < 100:
+                        gray_pixels[x, y] = 255  # Make it white
+        
+        # Create a pure black version on white background
+        black_img = Image.new("RGB", gray.size, "white")
+        pixels = gray.load()
+        black_pixels = black_img.load()
+        for y in range(gray.size[1]):
+            for x in range(gray.size[0]):
+                if pixels[x, y] < 250:  # Not white
+                    black_pixels[x, y] = (0, 0, 0)  # Pure black
+        
+        # Resize maintaining aspect ratio with higher quality
+        aspect_ratio = black_img.width / black_img.height
+        new_height = target_height
+        new_width = int(target_height * aspect_ratio)
+        black_img = black_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        return black_img
+    except Exception as e:
+        print(f"Warning: Could not load logo {logo_path}: {e}")
+        return None
+
+
+def create_pdf_report(data_file: Path, output_pdf: Path):
+    """Create comprehensive A4 PDF report with 80s scientific aesthetic"""
+    
+    print(f"\nGenerating A4 PDF Report: {output_pdf}")
+    print("=" * 60)
+    
+    # Read and parse data file
+    lines = read_file_lines(str(data_file))
+    metadata = parse_metadata(lines)
+    
+    # If sample name is Unknown, extract from filename
+    if metadata['sample_name'] == 'Unknown':
+        metadata['sample_name'] = data_file.stem  # Get filename without extension
+    
+    pixels, adcs = parse_lines_to_arrays(lines)
+    
+    # Estimate dark and calculate intensity
+    adc_dark, _ = estimate_dark(pixels, adcs)
+    intensities = adc_dark - adcs
+    
+    # Load calibration
+    calib_points = load_calibration_points()
+    wavelengths = apply_calibration(pixels, metadata['calibration_coeffs'])
+    
+    # Load logos
+    script_dir = Path(__file__).parent.parent
+    astrolens_logo = load_and_convert_logo(script_dir / "assets" / "astrolens.png", target_height=80)
+    pyspec_logo = load_and_convert_logo(script_dir / "assets" / "icon.png", target_height=80, convert_yellow_to_white=True)
+    
+    # Create PDF with matplotlib
+    with PdfPages(output_pdf) as pdf:
+        # A4 size in inches (210mm x 297mm)
+        fig = plt.figure(figsize=(8.27, 11.69), facecolor='white')
+        
+        # Use monospace font for 80s look
+        plt.rcParams['font.family'] = 'monospace'
+        plt.rcParams['font.size'] = 9
+        
+        # ============= HEADER SECTION =============
+        # Add logos at top
+        logo_y = 0.96
+        if astrolens_logo:
+            ax_logo1 = fig.add_axes([0.05, logo_y, 0.15, 0.04])
+            ax_logo1.imshow(astrolens_logo)
+            ax_logo1.axis('off')
+        
+        if pyspec_logo:
+            ax_logo2 = fig.add_axes([0.80, logo_y, 0.15, 0.04])
+            ax_logo2.imshow(pyspec_logo)
+            ax_logo2.axis('off')
+        
+        # Title (removed to avoid overlap)
+        # fig.text(0.5, 0.93, 'SPECTROSCOPY DATA ANALYSIS REPORT', 
+        #         ha='center', va='top', fontsize=14, weight='bold', family='monospace')
+        # fig.text(0.5, 0.91, '═' * 70, 
+        #         ha='center', va='top', fontsize=8, family='monospace')
+        
+        # ============= METADATA SECTION =============
+        meta_y_start = 0.95
+        
+        # Format integration time with appropriate unit
+        formatted_int_time = format_time_with_unit(metadata['integration_time'])
+        
+        meta_text = f"""
+-----------------------------------------------------------------------------------------------------------------------------------------
+  ACQUISITION PARAMETERS                                                                                                        
+-----------------------------------------------------------------------------------------------------------------------------------------
+  Name:                      {metadata['sample_name']:<45s}
+  Date:                      {metadata['date']:<25s}   Time:                      {metadata['time']:<25s}
+
+  TIMING CONFIGURATION                                                                                                          
+  SH Period:                 {metadata['sh_period']:<25s}   ICG Period:                {metadata['icg_period']:<25s}
+  Integration Time:          {formatted_int_time:<25s}
+
+  DATA STATISTICS                                                                                                               
+  Average Count:             {metadata['average_count']:<25s}   Total Pixels:              {len(pixels):<25d}
+-----------------------------------------------------------------------------------------------------------------------------------------
+"""
+        fig.text(0.05, meta_y_start, meta_text, 
+                va='top', fontsize=6.5, family='monospace', linespacing=1.3)
+        
+        # ============= RAW MODE GRAPH =============
+        ax1 = fig.add_axes([0.10, 0.62, 0.85, 0.16])
+        ax1.plot(pixels, adcs, 'k-', linewidth=0.5)
+        ax1.axhline(adc_dark, color='k', linestyle=':', linewidth=0.8, alpha=0.7)
+        ax1.set_xlabel('PIXEL NUMBER', fontsize=8, weight='bold', family='monospace')
+        ax1.set_ylabel('ADC COUNTS', fontsize=8, weight='bold', family='monospace')
+        ax1.set_title('RAW MODE: PIXEL vs ADC COUNTS', 
+                     fontsize=9, weight='bold', family='monospace', pad=10)
+        ax1.grid(True, linestyle=':', linewidth=0.3, color='gray', alpha=0.5)
+        ax1.spines['top'].set_linewidth(0.5)
+        ax1.spines['right'].set_linewidth(0.5)
+        ax1.spines['bottom'].set_linewidth(0.5)
+        ax1.spines['left'].set_linewidth(0.5)
+        # Invert y-axis to flip graph vertically
+        ax1.invert_yaxis()
+        
+        # Shade dummy pixel regions (no label)
+        ax1.axvspan(1, 32, alpha=0.1, color='gray')
+        ax1.axvspan(3679, 3694, alpha=0.1, color='gray')
+        
+        # ============= SPECTROSCOPY MODE GRAPH =============
+        ax2 = fig.add_axes([0.10, 0.36, 0.85, 0.16])
+        ax2.plot(wavelengths, intensities, 'k-', linewidth=0.5)
+        ax2.set_xlabel('WAVELENGTH (nm)', fontsize=8, weight='bold', family='monospace')
+        ax2.set_ylabel('INTENSITY (a.u.)', fontsize=8, weight='bold', family='monospace')
+        ax2.set_title('SPECTROSCOPY MODE: WAVELENGTH vs INTENSITY', 
+                     fontsize=9, weight='bold', family='monospace', pad=10)
+        ax2.grid(True, linestyle=':', linewidth=0.3, color='gray', alpha=0.5)
+        ax2.spines['top'].set_linewidth(0.5)
+        ax2.spines['right'].set_linewidth(0.5)
+        ax2.spines['bottom'].set_linewidth(0.5)
+        ax2.spines['left'].set_linewidth(0.5)
+        
+        # ============= CALIBRATION SECTION =============
+        # Split into two columns: table on left, graph on right
+        
+        # Calibration points table (positioned more to the right)
+        cal_y_start = 0.28
+        cal_table = f"""
+------------------------------------------------
+  CALIBRATION POINTS (4-PT POLYNOMIAL)        
+------------------------------------------------
+  Point          Pixel          Wavelength (nm)          
+------------------------------------------------
+"""
+        for i, point in enumerate(calib_points, 1):
+            cal_table += f"    {i}            {point['pixel']:>5d}                {point['wavelength']:>7.2f}              \n"
+        
+        cal_table += """------------------------------------------------
+"""
+        fig.text(0.05, cal_y_start, cal_table, 
+                va='top', fontsize=6.5, family='monospace', linespacing=1.3)
+        
+        # ============= CALIBRATION CURVE GRAPH (right side) =============
+        ax3 = fig.add_axes([0.48, 0.08, 0.47, 0.20])
+        
+        # Plot calibration curve
+        pixel_vals = [p["pixel"] for p in calib_points]
+        wavelength_vals = [p["wavelength"] for p in calib_points]
+        coeffs = np.polyfit(pixel_vals, wavelength_vals, 3)
+        polynomial = np.poly1d(coeffs)
+        
+        x_curve = np.linspace(0, 3693, 200)
+        y_curve = polynomial(x_curve)
+        
+        ax3.plot(x_curve, y_curve, 'k-', linewidth=1.2, label='Calibration Curve')
+        ax3.plot(pixel_vals, wavelength_vals, 'ko', markersize=6, 
+                markerfacecolor='white', markeredgewidth=1.5, label='Calib Points')
+        
+        ax3.set_xlabel('PIXEL NUMBER', fontsize=8, weight='bold', family='monospace')
+        ax3.set_ylabel('WAVELENGTH (nm)', fontsize=8, weight='bold', family='monospace')
+        ax3.set_title('CALIBRATION CURVE', 
+                     fontsize=9, weight='bold', family='monospace', pad=10)
+        ax3.grid(True, linestyle=':', linewidth=0.3, color='gray', alpha=0.5)
+        ax3.legend(loc='best', fontsize=6, frameon=True)
+        ax3.spines['top'].set_linewidth(0.5)
+        ax3.spines['right'].set_linewidth(0.5)
+        ax3.spines['bottom'].set_linewidth(0.5)
+        ax3.spines['left'].set_linewidth(0.5)
+        
+        # Footer
+        footer_text = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | pySPEC Spectroscopy System | www.AstroLens.net"
+        fig.text(0.5, 0.01, footer_text, 
+                ha='center', va='bottom', fontsize=6, family='monospace', style='italic')
+        
+        # Save page to PDF
+        pdf.savefig(fig, facecolor='white', edgecolor='none')
+        plt.close(fig)
+    
+    print(f"\n✓ PDF Report generated successfully: {output_pdf}")
+    print("=" * 60)
 
 
 def main():
+    """Main entry point"""
     parser = argparse.ArgumentParser(
-        description="Open a .dat file via dialog and produce intensity + regression outputs in a new timestamped folder."
+        description="Generate A4 PDF scientific report from TCD1304 spectroscopy data (.dat files)"
     )
     parser.add_argument(
         "infile",
         nargs="?",
         default=None,
-        help="optional path to .dat file (if omitted, a file dialog will open)",
-    )
-    parser.add_argument(
-        "--interp",
-        choices=["spline", "cubic", "linear"],
-        default="spline",
-        help="regression method for overlay and sampled CSV",
-    )
-    parser.add_argument(
-        "--dark-method",
-        choices=["median", "mean"],
-        default="median",
-        help="how to estimate ADC_dark",
-    )
-    parser.add_argument(
-        "--samples",
-        type=int,
-        default=10000,
-        help="number of points to sample the interpolated function",
-    )
-    parser.add_argument(
-        "--smooth",
-        type=float,
-        default=0.2,
-        help="smoothing multiplier for spline (larger -> smoother). Default 0.2",
-    )
-    # Default smooths: keep only the weaker values (remove 0.1 and 0.2 as requested)
-    parser.add_argument(
-        "--smooths",
-        type=str,
-        default="0.01,0.02,0.05",
-        help="comma-separated list of smoothing multipliers to plot multiple regressions (e.g. '0.01,0.02,0.05')",
-    )
-    parser.add_argument(
-        "--linewidth",
-        type=float,
-        default=0.6,
-        help="default line width for PNG output (thin lines)",
+        help="Path to .dat file (if omitted, a file dialog will open)"
     )
     args = parser.parse_args()
-
+    
+    # Select input file
     infile_path: Path | None = None
     if args.infile:
         infile_path = Path(args.infile).expanduser().resolve()
         if not infile_path.is_file():
-            print(f"Error: provided infile not found: {infile_path}", file=sys.stderr)
+            print(f"Error: File not found: {infile_path}", file=sys.stderr)
             sys.exit(2)
     else:
         chosen = choose_file_with_dialog()
         if chosen is None:
-            # If dialog isn't available or user canceled, ask for path fallback
-            if args.infile:
-                infile_path = Path(args.infile).expanduser().resolve()
-            else:
-                p = input(
-                    "No file chosen. Enter the path to the .dat file (or press Enter to quit): "
-                ).strip()
-                if not p:
-                    print("No file provided. Exiting.")
-                    sys.exit(1)
-                infile_path = Path(p).expanduser().resolve()
+            p = input("No file chosen. Enter path to .dat file (or press Enter to quit): ").strip()
+            if not p:
+                print("No file provided. Exiting.")
+                sys.exit(1)
+            infile_path = Path(p).expanduser().resolve()
         else:
             infile_path = chosen
-
+    
     if not infile_path or not infile_path.is_file():
         print(f"Input file not found: {infile_path}", file=sys.stderr)
         sys.exit(2)
-
-    # Determine creation timestamp of the original file for folder name
-    timestamp_str = format_ctime_for_name(infile_path)
-    out_dir = infile_path.parent / f"{infile_path.stem}_{timestamp_str}"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_prefix = infile_path.stem
-
-    print(f"Selected file: {infile_path}")
-    print(f"Outputs will be written to: {out_dir}")
-
-    # Read and parse
-    lines = read_file_lines(str(infile_path))
-    pixels, adcs = parse_lines_to_arrays(lines)
-    print(f"Read {pixels.size} samples (pixel range {pixels.min()}..{pixels.max()})")
-
-    adc_dark, dark_values = estimate_dark(pixels, adcs, method=args.dark_method)
-    print(
-        f"Estimated ADC_dark ({args.dark_method}) = {adc_dark:.3f} from {dark_values.size} dummy pixels"
-    )
-    intensities = adc_dark - adcs
-
-    # Save per-pixel CSV
-    out_csv = out_dir / f"{out_prefix}_Ipixel.csv"
-    save_pixel_csv(pixels, adcs, intensities, out_csv)
-    print(f"Wrote per-pixel CSV -> {out_csv}")
-
-    # Make interpolator and sample
-    # Prepare sampling grid
-    xs = np.linspace(pixels.min(), pixels.max(), max(1000, args.samples))
-
-    # Parse multi-smoothing values for plotting several regression strengths
+    
+    # Generate output PDF name
+    output_pdf = infile_path.parent / f"{infile_path.stem}_report.pdf"
+    
     try:
-        smooth_values = [
-            float(s.strip()) for s in str(args.smooths).split(",") if s.strip()
-        ]
-    except Exception:
-        smooth_values = [args.smooth]
-
-    interp_results = []
-    for s_val in smooth_values:
-        interp_fn_i, interp_kind_i = make_interpolator(
-            pixels, intensities, method=args.interp, smooth=s_val
-        )
-        try:
-            ys_i = interp_fn_i(xs)
-            ys_i = np.asarray(ys_i, dtype=float)
-        except Exception:
-            ys_i = np.interp(xs, pixels, intensities)
-            interp_kind_i = "numpy.interp(fallback)"
-        interp_results.append((s_val, interp_kind_i, ys_i))
-
-    # Plot: raw ADC (top), flipped Ipixel (middle), and interpolated/smoothed (bottom)
-    fig, (ax0, ax1, ax2) = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
-    lw = float(args.linewidth)
-    ax0.plot(pixels, adcs, color="tab:blue", lw=lw, label="ADC (raw)")
-    ax0.axhline(
-        adc_dark, color="tab:orange", ls="--", lw=lw, label=f"ADC_dark={adc_dark:.2f}"
-    )
-    ax0.set_ylabel("ADC counts")
-    ax0.legend(fontsize="small")
-    ax0.grid(True, alpha=0.3)
-
-    # Middle: flipped (upside-down) so peaks become troughs
-    # Use max-based inversion to keep signal in the same positive range
-    y_flipped = np.max(intensities) - intensities
-    # Make the flipped trace more visually distinct: green, slightly thicker
-    ax1.plot(
-        pixels,
-        y_flipped,
-        color="green",
-        lw=max(0.8, lw * 1.2),
-        label="Ipixel (flipped)",
-    )
-    ax1.set_ylabel("Flipped Ipixel")
-    # Visually invert the y-axis so the panel appears upside-down (peaks downwards)
-    ax1.invert_yaxis()
-    ax1.legend(fontsize="small")
-    ax1.grid(True, alpha=0.3)
-
-    # Bottom: interpolated / smoothed (separate plot). Plot multiple curves with different smoothing strengths.
-    # Plot a very faint original Ipixel trace in the regression panel for reference
-    orig_on_xs = np.interp(xs, pixels, intensities)
-    # Slightly more visible raw trace for reference
-    ax2.plot(
-        xs, orig_on_xs, color="gray", lw=0.8, alpha=0.28, label="raw Ipixel (faint)"
-    )
-
-    # Use only the requested distinct colors (no green/yellow): blue, red, purple
-    palette = ["blue", "red", "purple"]
-    colors = [palette[i % len(palette)] for i in range(len(interp_results))]
-    import math
-
-    for (s_val, kind, ys_i), col in zip(interp_results, colors):
-        # Force s=0.05 to green for emphasis per request (use isclose for safety)
-        plot_col = (
-            "green"
-            if math.isclose(float(s_val), 0.05, rel_tol=1e-6, abs_tol=1e-9)
-            else col
-        )
-        ax2.plot(
-            xs,
-            ys_i,
-            color=plot_col,
-            lw=max(0.8, lw),
-            alpha=0.95,
-            label=f"s={s_val} ({kind})",
-        )
-    ax2.set_xlabel("pixel number")
-    ax2.set_ylabel("Ipixel (interpolated)")
-    ax2.legend(fontsize="small")
-    ax2.grid(True, alpha=0.3)
-
-    # Shade dummy pixel regions if within range
-    try:
-        pmin, pmax = pixels.min(), pixels.max()
-        if pmin <= 32:
-            ax0.fill_betweenx(ax0.get_ylim(), 1, 32, color="gray", alpha=0.08)
-            ax1.fill_betweenx(ax1.get_ylim(), 1, 32, color="gray", alpha=0.08)
-            ax2.fill_betweenx(ax2.get_ylim(), 1, 32, color="gray", alpha=0.08)
-        if pmax >= 3679:
-            ax0.fill_betweenx(ax0.get_ylim(), 3679, 3694, color="gray", alpha=0.08)
-            ax1.fill_betweenx(ax1.get_ylim(), 3679, 3694, color="gray", alpha=0.08)
-            ax2.fill_betweenx(ax2.get_ylim(), 3679, 3694, color="gray", alpha=0.08)
-    except Exception:
-        pass
-
-    pngfile = out_dir / f"{out_prefix}_plot.png"
-    plt.tight_layout()
-    fig.savefig(str(pngfile), dpi=200)
-    plt.close(fig)
-    print(f"Saved plot -> {pngfile}")
-    print("Done. All generated files are in:", out_dir)
+        create_pdf_report(infile_path, output_pdf)
+        print(f"\n✓ Success! Open the report: {output_pdf}")
+    except Exception as e:
+        print(f"\n✗ Error generating report: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == "__main__":

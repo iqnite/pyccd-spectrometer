@@ -31,11 +31,15 @@ class Calibration:
                 with open(CALIBRATION_FILE, "r") as f:
                     calibration_data = json.load(f)
                     # Ensure we have exactly 4 points
-                    if len(calibration_data.get("points", [])) != 4:
-                        calibration_data = default_calibration_data.copy()
+                    if len(calibration_data.get("points", [])) == 4:
+                        self.calibration_data = calibration_data
+                    else:
+                        self.calibration_data = default_calibration_data.copy()
                         self.save()
+            else:
+                self.calibration_data = default_calibration_data.copy()
         except:
-            calibration_data = default_calibration_data.copy()
+            self.calibration_data = default_calibration_data.copy()
 
     def save(self):
         """Save calibration to file"""

@@ -81,6 +81,12 @@ def openfile(self, CCDplot):
             self.bsave.config(state=tk.NORMAL)
         except Exception:
             pass
+        
+        # Enable subtract button now that data has been loaded
+        try:
+            self.bsubtract.config(state=tk.NORMAL)
+        except Exception:
+            pass
 
     except IOError:
         messagebox.showerror(
@@ -92,10 +98,28 @@ def savefile(self):
     filename = filedialog.asksaveasfilename(
         defaultextension=".dat", title="Save file as", parent=self
     )
+    if not filename:  # User cancelled
+        return
+        
     try:
+        from datetime import datetime
+        from spectrometer.calibration import default_calibration
+        
         with open(filename, mode="w") as csvfile:
             writeCSV = csv.writer(csvfile, delimiter=" ")
+            
+            # Header
             writeCSV.writerow(["#Data", "from", "the", "TCD1304", "linear", "CCD"])
+            
+            # Date and Time - always save current datetime
+            current_datetime = datetime.now()
+            writeCSV.writerow(["#Date:", current_datetime.strftime("%Y-%m-%d"), "Time:", current_datetime.strftime("%H:%M:%S")])
+            
+            # Extract just the filename without path
+            sample_name = filename.split("/")[-1].split("\\")[-1].replace(".dat", "")
+            writeCSV.writerow(["#Sample-name:", sample_name])
+            
+            # Column description
             writeCSV.writerow(
                 [
                     "#column",
@@ -110,30 +134,81 @@ def savefile(self):
                 ]
             )
             writeCSV.writerow(
-                ["#Pixel", "1-32", "and", "3679-3694", "and", "are", "dummy", "pixels"]
+                ["#Pixel", "1-32", "and", "3679-3694", "are", "dummy", "pixels"]
             )
+            
+            # Timing configuration
+            sh_period = str(config.SHsent) if hasattr(config, 'SHsent') else "200"
+            icg_period = str(config.ICGsent) if hasattr(config, 'ICGsent') else "100000"
+            int_time = str(float(config.SHsent) / 2) if hasattr(config, 'SHsent') else "100.0"
+            
             writeCSV.writerow(
                 [
                     "#SH-period:",
-                    str(config.SHsent),
-                    "",
-                    "",
+                    sh_period,
                     "",
                     "ICG-period:",
-                    str(config.ICGsent),
-                    "",
-                    "",
+                    icg_period,
                     "",
                     "Integration",
                     "time:",
-                    str(config.SHsent / 2),
+                    int_time,
                     "µs",
                 ]
             )
+            
+            # Add firmware settings (always save actual values, never N/A)
+            avg_value = config.AVGn[0] if hasattr(config, 'AVGn') and len(config.AVGn) > 0 else 0
+            mclk_value = config.MCLK if hasattr(config, 'MCLK') else 2000000
+            writeCSV.writerow(["#Firmware-settings:", "AVG:", str(avg_value), "MCLK:", str(mclk_value), "Hz"])
+            
+            # Add average count (calculate from valid pixels, not dummy pixels)
+            try:
+                if hasattr(config, 'rxData16') and len(config.rxData16) > 3679:
+                    avg_count = float(np.mean(config.rxData16[32:3679]))
+                    writeCSV.writerow(["#Average-count:", f"{avg_count:.2f}"])
+                else:
+                    writeCSV.writerow(["#Average-count:", "0.00"])
+            except Exception as e:
+                print(f"Warning: Could not calculate average count: {e}")
+                writeCSV.writerow(["#Average-count:", "0.00"])
+            
+            # Add spectroscopy mode
+            spec_mode = config.spectroscopy_mode if hasattr(config, 'spectroscopy_mode') else False
+            writeCSV.writerow(["#Spectroscopy-mode:", str(spec_mode)])
+            
+            # Add calibration coefficients - calculate from calibration points
+            try:
+                if hasattr(default_calibration, 'calibration_data'):
+                    points = default_calibration.calibration_data.get("points", [])
+                    if len(points) == 4:
+                        pixel_vals = [p["pixel"] for p in points]
+                        wavelength_vals = [p["wavelength"] for p in points]
+                        coeffs = np.polyfit(pixel_vals, wavelength_vals, 3)
+                        coeff_str = ",".join([f"{c:.10e}" for c in coeffs])
+                        writeCSV.writerow(["#Calibration-coefficients:", coeff_str])
+                    else:
+                        # Default linear calibration
+                        writeCSV.writerow(["#Calibration-coefficients:", "0,1,0,0"])
+                else:
+                    writeCSV.writerow(["#Calibration-coefficients:", "0,1,0,0"])
+            except Exception as e:
+                print(f"Warning: Could not save calibration coefficients: {e}")
+                writeCSV.writerow(["#Calibration-coefficients:", "0,1,0,0"])
+            
+            # Write pixel data
             for i in range(3694):
                 writeCSV.writerow([str(i + 1), str(config.rxData16[i])])
+            
+            print(f"Successfully saved spectrum data to: {filename}")
 
-    except IOError:
+    except IOError as e:
+        print(f"IOError saving file: {e}")
         messagebox.showerror(
             "pySPEC", "There's a problem saving the file."
+        )
+    except Exception as e:
+        print(f"Error saving file: {e}")
+        messagebox.showerror(
+            "pySPEC", f"Error saving file: {str(e)}"
         )

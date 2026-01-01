@@ -302,3 +302,8 @@ def panelwakeup(panel):
         pass
     if config.datainvert == 1:
         panel.cbalance.config(state=ttk.NORMAL)
+    # Enable subtract button after data collection
+    try:
+        panel.bsubtract.config(state=ttk.NORMAL)
+    except Exception:
+        pass

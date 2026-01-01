@@ -30,10 +30,15 @@ import numpy as np
 import serial
 import math
 import webbrowser
+import json
+import os
 
 from spectrometer import config, CCDhelp, CCDserial, CCDfiles
 from spectrometer.calibration import default_calibration
 from utils import plotgraph
+
+# COM settings file
+COM_SETTINGS_FILE = "com_settings.json"
 
 
 class BuildPanel(ttk.Frame):
@@ -194,15 +199,28 @@ class BuildPanel(ttk.Frame):
 
     def devicefields(self, device_row):
         # device setup - variables, widgets and traces associated with the device entrybox
+        # Load saved COM settings first
+        self.load_com_settings()
+        
         # variables
         self.device_address = tk.StringVar()
         self.device_status = tk.StringVar()
         self.device_statuscolor = tk.StringVar()
+        
         # widgets
         self.ldevice = ttk.Label(self, text="COM-device:")
         self.ldevice.grid(column=0, row=device_row, sticky="e")
-        self.edevice = ttk.Entry(self, textvariable=self.device_address, justify="left")
-        self.edevice.grid(column=1, row=device_row, sticky="w", padx=5)
+        
+        # Frame to hold entry and save button
+        device_frame = ttk.Frame(self)
+        device_frame.grid(column=1, row=device_row, sticky="w", padx=5)
+        
+        self.edevice = ttk.Entry(device_frame, textvariable=self.device_address, justify="left", width=15)
+        self.edevice.pack(side=tk.LEFT)
+        
+        # Add save icon button
+        self.add_com_save_button(device_frame)
+        
         self.ldevicestatus = tk.Label(
             self, textvariable=self.device_status, fg="#ffffff"
         )
@@ -218,7 +236,9 @@ class BuildPanel(ttk.Frame):
         # firmware selection
         self.lfirmware = ttk.Label(self, text="Firmware:")
         self.lfirmware.grid(column=0, row=device_row + 2, sticky="e", pady=5)
-        self.firmware_type = tk.StringVar(value="STM32F40x")
+        # Use saved firmware if available
+        default_firmware = getattr(config, 'saved_firmware', 'STM32F40x')
+        self.firmware_type = tk.StringVar(value=default_firmware)
         self.firmware_dropdown = ttk.Combobox(
             self,
             textvariable=self.firmware_type,
@@ -1009,6 +1029,91 @@ class BuildPanel(ttk.Frame):
         default_calibration.open_calibration_window(
             self.master, on_apply_callback=self.CCDplot.replot_current_spectrum
         )
+    
+    def load_com_settings(self):
+        """Load COM settings from file"""
+        try:
+            if os.path.exists(COM_SETTINGS_FILE):
+                with open(COM_SETTINGS_FILE, "r") as f:
+                    settings = json.load(f)
+                    config.port = settings.get("port", config.port)
+                    # Load firmware type if saved
+                    if "firmware" in settings:
+                        config.saved_firmware = settings.get("firmware", "STM32F40x")
+        except Exception as e:
+            print(f"Could not load COM settings: {e}")
+    
+    def save_com_settings(self):
+        """Save COM settings to file"""
+        try:
+            settings = {
+                "port": self.device_address.get(),
+                "firmware": self.firmware_type.get()
+            }
+            with open(COM_SETTINGS_FILE, "w") as f:
+                json.dump(settings, f, indent=4)
+            # Update config
+            config.port = self.device_address.get()
+            return True
+        except Exception as e:
+            print(f"Could not save COM settings: {e}")
+            return False
+    
+    def add_com_save_button(self, parent_frame):
+        """Add save icon button next to COM port entry"""
+        # Create button matching the style of other save buttons
+        self.b_save_com = ttk.Button(
+            parent_frame,
+            text="",
+            style="Accent.TButton",
+            width=3,
+            command=self.save_com_settings
+        )
+        self.b_save_com.pack(side=tk.LEFT, padx=(3, 0))
+        
+        # Add icon overlay to the button
+        try:
+            from PIL import Image, ImageTk
+            import os
+            
+            # Get the path to save.png
+            base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+            save_icon_path = os.path.join(base_dir, "save.png")
+            
+            if os.path.exists(save_icon_path):
+                save_icon_image = Image.open(save_icon_path).convert("RGBA")
+                
+                # Make the icon solid black while preserving transparency
+                try:
+                    save_alpha = save_icon_image.getchannel("A")
+                except Exception:
+                    save_alpha = save_icon_image.convert("L")
+                save_black_img = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 255))
+                save_icon_solid = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 0))
+                save_icon_solid.paste(save_black_img, (0, 0), mask=save_alpha)
+                
+                # Resize icon to reasonable size
+                target_size = (16, 16)
+                try:
+                    resample = Image.Resampling.LANCZOS
+                except Exception:
+                    resample = Image.LANCZOS
+                save_icon_resized = save_icon_solid.resize(target_size, resample)
+                icon_photo_com = ImageTk.PhotoImage(save_icon_resized)
+                
+                # Place label with icon on top of the button
+                self.icon_overlay_com = tk.Label(
+                    self.b_save_com,
+                    image=icon_photo_com,
+                    bg="#ffc200",
+                    bd=0,
+                    cursor="hand2",
+                )
+                self.icon_overlay_com.image = icon_photo_com
+                self.icon_overlay_com.place(relx=0.5, rely=0.5, anchor="center")
+                self.icon_overlay_com.bind("<Button-1>", lambda e: self.save_com_settings())
+        except Exception as e:
+            print(f"Could not create COM save icon: {e}")
 
     def open_color_picker(self):
         """Open color picker window for plot customization"""
@@ -1512,8 +1617,8 @@ class BuildPanel(ttk.Frame):
                 self.icon_overlay.place(relx=0.5, rely=0.5, anchor="center")
                 self.icon_overlay.bind("<Button-1>", lambda e: self.open_color_picker())
 
-                # Place icon on zoom button (use save.png)
-                save_icon_path = os.path.join(base_dir, "save.png")
+                # Place icon on zoom button (use image_icon.png)
+                save_icon_path = os.path.join(base_dir, "image_icon.png")
                 if os.path.exists(save_icon_path):
                     save_icon_image = Image.open(save_icon_path).convert("RGBA")
                     # Make black
@@ -1524,10 +1629,10 @@ class BuildPanel(ttk.Frame):
                     save_black_img = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 255))
                     save_icon_solid = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 0))
                     save_icon_solid.paste(save_black_img, (0, 0), mask=save_alpha)
-                    save_icon_resized = save_icon_solid.resize(target_size, resample)
+                    save_icon_resized = save_icon_solid.resize((20, 20), resample)
                     icon_photo_zoom = ImageTk.PhotoImage(save_icon_resized)
                 else:
-                    icon_photo_zoom = ImageTk.PhotoImage(icon_solid.resize(target_size, resample))
+                    icon_photo_zoom = ImageTk.PhotoImage(icon_solid.resize((20, 20), resample))
                 
                 self.icon_overlay_zoom = tk.Label(
                     self.b_zoom,

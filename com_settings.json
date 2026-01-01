@@ -1,0 +1,4 @@
+{
+    "port": "COM6",
+    "firmware": "STM32F40x"
+}
