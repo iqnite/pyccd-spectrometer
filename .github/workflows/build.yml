@@ -61,3 +61,33 @@ jobs:
               with:
                   name: pySPEC-macOS
                   path: pySPEC.dmg
+
+    create-draft-release:
+        needs: [build-windows, build-macos]
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - name: Download Windows artifact
+              uses: actions/download-artifact@v4
+              with:
+                  name: pySPEC-exe
+                  path: ./artifacts/windows
+
+            - name: Download macOS artifact
+              uses: actions/download-artifact@v4
+              with:
+                  name: pySPEC-macOS
+                  path: ./artifacts/macos
+
+            - name: Create Draft Release
+              uses: softprops/action-gh-release@v1
+              with:
+                  draft: true
+                  files: |
+                      ./artifacts/windows/pySPEC.exe
+                      ./artifacts/macos/pySPEC.dmg
+                  name: Release ${{ github.ref_name }}
+                  generate_release_notes: true
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
