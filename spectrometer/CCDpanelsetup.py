@@ -129,14 +129,6 @@ class BuildPanel(ttk.Frame):
         except Exception as e:
             print(f"Could not load logo: {e}")
         
-        self.lheader = ttk.Label(
-            self,
-            text="pySPEC",
-            font=("Avenir", 16, "bold"),
-            foreground="#ffc200",
-        )
-        self.lheader.grid(row=0, column=1, pady=10, padx=5, sticky="e")
-        
         # Create circular close button with high resolution
         from PIL import Image, ImageDraw, ImageFont
         
@@ -221,7 +213,7 @@ class BuildPanel(ttk.Frame):
         self.bclose.bind("<Button-1>", lambda e, root=self.master: root.destroy())
         self.bclose.config(cursor="hand2")
         
-        self.bclose.grid(row=0, column=2, pady=10, padx=(0, 5))
+        self.bclose.grid(row=0, column=2, pady=10, padx=(0, 10), sticky="e")
     
     def on_close_hover(self, event):
         """Change color on hover"""
@@ -885,7 +877,7 @@ class BuildPanel(ttk.Frame):
     def collectfields(self, collect_row, SerQueue, progress_var):
         # collect and stop buttons
         self.buttonframe = ttk.Frame(self)
-        self.buttonframe.grid(row=collect_row, columnspan=2, padx=(35, 0))
+        self.buttonframe.grid(row=collect_row, columnspan=2, padx=0)
         self.bcollect = ttk.Button(
             self.buttonframe,
             text="Collect",
@@ -895,7 +887,7 @@ class BuildPanel(ttk.Frame):
                 panel, SerQueue, progress_var
             ),
         )
-        self.bcollect.pack(side=tk.LEFT, padx=5, anchor="w")
+        self.bcollect.pack(side=tk.LEFT, padx=5)
         self.bstop = ttk.Button(
             self.buttonframe,
             text="Stop",
@@ -907,7 +899,7 @@ class BuildPanel(ttk.Frame):
         
         # Baseline buttons
         self.baseline_frame = ttk.Frame(self)
-        self.baseline_frame.grid(row=collect_row + 1, columnspan=2, padx=(35, 0), pady=(5, 0))
+        self.baseline_frame.grid(row=collect_row + 1, columnspan=2, padx=0, pady=(5, 0))
         
         self.save_baseline_btn = ttk.Button(
             self.baseline_frame,
@@ -930,7 +922,7 @@ class BuildPanel(ttk.Frame):
         self.progress = ttk.Progressbar(
             self, variable=progress_var, maximum=10, length=200,
         )
-        self.progress.grid(row=collect_row + 3, columnspan=2, sticky="EW", padx=(45, 5))
+        self.progress.grid(row=collect_row + 3, columnspan=2, sticky="EW", padx=5)
 
     def plotmodefields(self, plotmode_row, CCDplot):
         # plot mode - variables, widgets and traces associated with the plot mode
@@ -1012,7 +1004,7 @@ class BuildPanel(ttk.Frame):
     def saveopenfields(self, save_row, CCDplot):
         # setup save/open buttons
         self.fileframe = ttk.Frame(self)
-        self.fileframe.grid(row=save_row, columnspan=2, padx=(40, 0))
+        self.fileframe.grid(row=save_row, columnspan=2, padx=0)
         self.bopen = ttk.Button(
             self.fileframe,
             text="Open",
@@ -1114,8 +1106,8 @@ class BuildPanel(ttk.Frame):
         )
 
         # Placeholder slider similar to Averages
-        self.lphslider = ttk.Label(self, text="Strength")
-        self.lphslider.grid(column=0, row=save_row + 3, sticky="e")
+        self.lphslider = ttk.Label(self, text="Strength", width=12)
+        self.lphslider.grid(column=0, row=save_row + 3, sticky="e", padx=(0, 0))
         self.ph_scale = ttk.Scale(
             self,
             from_=10,
@@ -1124,19 +1116,19 @@ class BuildPanel(ttk.Frame):
             length=200,
             command=self._phslider_callback,
         )
-        self.ph_scale.grid(column=1, row=save_row + 3, padx=5, pady=5, sticky="w")
+        self.ph_scale.grid(column=1, row=save_row + 3, padx=(0, 5), pady=5, sticky="w")
         # Update plot only when mouse is released to avoid lag during dragging
         self.ph_scale.bind("<ButtonRelease-1>", lambda e, CCDplot=CCDplot: self._on_regression_release(CCDplot))
         # Use a tk.Label so we can change the foreground color when disabled
-        self.ph_label = tk.Label(self, text="0", fg="#ffffff")
-        self.ph_label.grid(column=2, row=save_row + 3, padx=5, pady=5, sticky="w")
+        self.ph_label = tk.Label(self, text="0", fg="#ffffff", width=8)
+        self.ph_label.grid(column=2, row=save_row + 3, padx=0, pady=5, sticky="w")
 
         # Set initial enabled/disabled state based on the checkbox
         self._ph_check_changed()
 
         # Opacity slider for the main plot line (0..100 -> 0.0..1.0)
-        self.lopacity = ttk.Label(self, text="Raw opacity")
-        self.lopacity.grid(column=0, row=save_row + 4, sticky="e")
+        self.lopacity = ttk.Label(self, text="Raw opacity", width=12)
+        self.lopacity.grid(column=0, row=save_row + 4, sticky="e", padx=(0, 0))
         self.opacity_scale = ttk.Scale(
             self,
             from_=0,
@@ -1145,7 +1137,7 @@ class BuildPanel(ttk.Frame):
             length=200,
             command=self._opacity_callback,
         )
-        self.opacity_scale.grid(column=1, row=save_row + 4, padx=5, pady=5, sticky="w")
+        self.opacity_scale.grid(column=1, row=save_row + 4, padx=(0, 5), pady=5, sticky="w")
         self.opacity_label = ttk.Label(self, text="1.00")
         self.opacity_label.grid(column=2, row=save_row + 4, padx=5, pady=5, sticky="w")
         self.opacity_scale.set(100)
@@ -1167,7 +1159,7 @@ class BuildPanel(ttk.Frame):
 
         # Tolerance settings for emission line matching
         tolerance_frame = ttk.Frame(self)
-        tolerance_frame.grid(column=0, row=save_row + 6, padx=(45, 5), pady=(10, 5), columnspan=3, sticky="w")
+        tolerance_frame.grid(column=0, row=save_row + 6, padx=5, pady=(10, 5), columnspan=3, sticky="w")
         
         # Green tolerance (exact match)
         ttk.Label(tolerance_frame, text="Green:").grid(row=0, column=0, padx=(0, 2), sticky="e")
@@ -1190,11 +1182,6 @@ class BuildPanel(ttk.Frame):
             command=self.apply_tolerance_settings,
             style="Accent.TButton"
         ).grid(row=0, column=6, padx=5)
-        
-        # Center the tolerance frame
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_columnconfigure(2, weight=1)
 
     def open_calibration(self):
         """Open calibration window with proper callback reference"""
