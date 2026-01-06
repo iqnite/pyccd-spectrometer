@@ -251,6 +251,11 @@ def progressthread(progress_var):
     # Total time is: ICGperiod * hardware_avg * software_iterations
     total_time = config.ICGperiod * hardware_avg * software_iterations / config.MCLK
     
+    # Add overhead for serial communication and data processing per iteration
+    # Estimate ~0.5 seconds per iteration for serial read and processing
+    serial_overhead = software_iterations * 0.5
+    total_time += serial_overhead
+    
     for i in range(1, 11):
         progress_var.set(i)
         # wait 1/10th of the total acquisition time before adding to progress bar

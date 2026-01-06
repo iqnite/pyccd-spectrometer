@@ -26,6 +26,13 @@ from datetime import datetime
 from PIL import Image
 import json
 
+# Import scipy for interpolation
+try:
+    from scipy.interpolate import UnivariateSpline, interp1d
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+
 # Try to import reportlab for better PDF control (optional)
 try:
     from reportlab.lib.pagesizes import A4
@@ -36,6 +43,50 @@ try:
 except ImportError:
     REPORTLAB_AVAILABLE = False
     A4 = (595.276, 841.890)  # A4 in points
+
+
+def make_interpolator(x, y, method="spline", smooth=0.001):
+    """
+    Create an interpolation function for spectral data.
+    
+    Args:
+        x: Array of x-values (pixels)
+        y: Array of y-values (intensities)
+        method: Interpolation method ('spline', 'linear', 'cubic')
+        smooth: Smoothing parameter for spline interpolation (default: 0.001)
+    
+    Returns:
+        (interpolator_function, method_name): Tuple of interpolation function and method used
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    
+    # Remove any NaN or inf values
+    valid_mask = np.isfinite(x) & np.isfinite(y)
+    x = x[valid_mask]
+    y = y[valid_mask]
+    
+    if len(x) < 2:
+        raise ValueError("Need at least 2 valid points for interpolation")
+    
+    if method == "spline" and SCIPY_AVAILABLE:
+        try:
+            # Use UnivariateSpline with smoothing parameter
+            # The 's' parameter controls smoothing: 0 = interpolating, larger = more smoothing
+            # Scale by variance of data and number of points for better effect
+            data_variance = np.var(y) if len(y) > 1 else 1.0
+            s_param = smooth * len(x) * data_variance / 100.0
+            interpolator = UnivariateSpline(x, y, s=s_param, k=3)
+            return interpolator, "spline"
+        except Exception:
+            # Fall back to linear interpolation if spline fails
+            pass
+    
+    # Fallback to numpy linear interpolation
+    def linear_interp(x_new):
+        return np.interp(x_new, x, y)
+    
+    return linear_interp, "linear"
 
 
 def choose_file_with_dialog(initialdir: str | None = None) -> Path | None:

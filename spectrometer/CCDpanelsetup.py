@@ -44,15 +44,15 @@ COM_SETTINGS_FILE = "com_settings.json"
 class BuildPanel(ttk.Frame):
     def __init__(self, master, CCDplot, SerQueue):
         # geometry-rows for packing the grid
-        mode_row = 5
-        device_row = 15
-        shicg_row = 25
-        continuous_row = 35
-        avg_row = 45
-        collect_row = 55
-        plotmode_row = 65
-        save_row = 75
-        update_row = 85
+        mode_row = 14
+        device_row = 24
+        shicg_row = 34
+        continuous_row = 44
+        avg_row = 54
+        collect_row = 64
+        plotmode_row = 74
+        save_row = 84
+        update_row = 94
         progress_var = tk.IntVar()
 
         super().__init__(master)
@@ -71,10 +71,14 @@ class BuildPanel(ttk.Frame):
         # Initialize comparison data storage
         self.comparison_data = None
         self.comparison_filename = None
+        
+        # Initialize baseline data storage
+        self.baseline_data = None
+        self.baseline_subtract_enabled = False
 
         # Create all widgets and space between them
         self.header_fields()
-        self.grid_rowconfigure(0, minsize=10)
+        self.grid_rowconfigure(1, minsize=25)  # Add space after header
         self.mode_fields(mode_row)
         # insert vertical space
         self.grid_rowconfigure(mode_row + 1, minsize=20)
@@ -99,21 +103,133 @@ class BuildPanel(ttk.Frame):
         self.aboutbutton(update_row + 3)
 
     def header_fields(self):
-        """Add header and close button"""
+        """Add header, logo, and close button"""
+        # Add AstroLens logo on the left
+        try:
+            from PIL import Image, ImageTk
+            import os
+            
+            # Get the path to the PNG file
+            logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "astrolens.png")
+            
+            if os.path.exists(logo_path):
+                logo_image = Image.open(logo_path)
+                
+                # Calculate proper aspect ratio resize for header
+                target_height = 45  # Increased from 30 for larger logo
+                aspect_ratio = logo_image.width / logo_image.height
+                target_width = int(target_height * aspect_ratio)
+                
+                logo_image = logo_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+                logo_photo = ImageTk.PhotoImage(logo_image)
+                
+                self.logo_label = ttk.Label(self, image=logo_photo)
+                self.logo_label.image = logo_photo  # Keep a reference
+                self.logo_label.grid(row=0, column=0, pady=10, padx=(5, 0), sticky="w")
+        except Exception as e:
+            print(f"Could not load logo: {e}")
+        
         self.lheader = ttk.Label(
             self,
             text="pySPEC",
             font=("Avenir", 16, "bold"),
             foreground="#ffc200",
         )
-        self.lheader.grid(row=0, column=2, pady=10, padx=5, sticky="e")
-        self.bclose = ttk.Button(
+        self.lheader.grid(row=0, column=1, pady=10, padx=5, sticky="e")
+        
+        # Create circular close button with high resolution
+        from PIL import Image, ImageDraw, ImageFont
+        
+        button_size = 30
+        scale = 4  # Render at 4x resolution for smooth edges
+        high_res_size = button_size * scale
+        
+        # Create high-resolution image
+        self.button_img = Image.new('RGBA', (high_res_size, high_res_size), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(self.button_img, 'RGBA')
+        
+        # Draw smooth circle
+        draw.ellipse([0, 0, high_res_size-1, high_res_size-1], fill='#ffc200')
+        
+        # Draw X text - use simple X instead of unicode
+        try:
+            font = ImageFont.truetype("arial.ttf", int(16 * scale))
+        except:
+            try:
+                font = ImageFont.truetype("Arial.ttf", int(16 * scale))
+            except:
+                font = None
+        
+        text = "X"
+        if font:
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            text_x = (high_res_size - text_width) // 2 - bbox[0]
+            text_y = (high_res_size - text_height) // 2 - bbox[1]
+            draw.text((text_x, text_y), text, fill='black', font=font)
+        else:
+            # Fallback: draw X as two lines
+            padding = high_res_size // 4
+            draw.line([(padding, padding), (high_res_size-padding, high_res_size-padding)], fill='black', width=scale*2)
+            draw.line([(high_res_size-padding, padding), (padding, high_res_size-padding)], fill='black', width=scale*2)
+        
+        # Scale down for smooth anti-aliased result
+        self.button_img = self.button_img.resize((button_size, button_size), Image.Resampling.LANCZOS)
+        self.button_photo = ImageTk.PhotoImage(self.button_img)
+        
+        # Create hover version (darker)
+        self.button_img_hover = Image.new('RGBA', (high_res_size, high_res_size), (0, 0, 0, 0))
+        draw_hover = ImageDraw.Draw(self.button_img_hover, 'RGBA')
+        draw_hover.ellipse([0, 0, high_res_size-1, high_res_size-1], fill='#e6ad00')
+        
+        if font:
+            draw_hover.text((text_x, text_y), text, fill='black', font=font)
+        else:
+            draw_hover.line([(padding, padding), (high_res_size-padding, high_res_size-padding)], fill='black', width=scale*2)
+            draw_hover.line([(high_res_size-padding, padding), (padding, high_res_size-padding)], fill='black', width=scale*2)
+        
+        self.button_img_hover = self.button_img_hover.resize((button_size, button_size), Image.Resampling.LANCZOS)
+        self.button_photo_hover = ImageTk.PhotoImage(self.button_img_hover)
+        
+        # Get background color
+        try:
+            style = ttk.Style()
+            bg_color = style.lookup('TFrame', 'background')
+            if not bg_color:
+                bg_color = '#1c1c1c'
+        except:
+            bg_color = '#1c1c1c'
+        
+        # Create canvas with the button image
+        self.bclose = tk.Canvas(
             self,
-            text="X",
-            style="Accent.TButton",
-            command=lambda root=self.master: root.destroy(),
+            width=button_size,
+            height=button_size,
+            highlightthickness=0,
+            bg=bg_color
         )
-        self.bclose.grid(row=0, column=3, pady=10)
+        
+        self.button_image_id = self.bclose.create_image(
+            button_size//2, button_size//2,
+            image=self.button_photo
+        )
+        
+        # Bind hover and click events
+        self.bclose.bind("<Enter>", self.on_close_hover)
+        self.bclose.bind("<Leave>", self.on_close_leave)
+        self.bclose.bind("<Button-1>", lambda e, root=self.master: root.destroy())
+        self.bclose.config(cursor="hand2")
+        
+        self.bclose.grid(row=0, column=2, pady=10, padx=(0, 5))
+    
+    def on_close_hover(self, event):
+        """Change color on hover"""
+        self.bclose.itemconfig(self.button_image_id, image=self.button_photo_hover)
+    
+    def on_close_leave(self, event):
+        """Restore color when not hovering"""
+        self.bclose.itemconfig(self.button_image_id, image=self.button_photo)
 
     def mode_fields(self, mode_row):
         """Add spectroscopy mode toggle"""
@@ -553,7 +669,7 @@ class BuildPanel(ttk.Frame):
 
         # plot intensities
         if config.datainvert == 1:
-            data = config.pltData16
+            data = config.pltData16.copy()
             # main plot uses opacity from slider (default 1.0)
             try:
                 alpha = float(self.opacity_scale.get()) / 100.0
@@ -565,16 +681,33 @@ class BuildPanel(ttk.Frame):
                     data = data[::-1]
             except Exception:
                 pass
+            
+            # Apply baseline subtraction if enabled
+            if self.baseline_subtract_enabled and self.baseline_data is not None:
+                try:
+                    # Ensure baseline data has same length as current data
+                    if len(self.baseline_data) == len(data):
+                        data = data.astype(float) - self.baseline_data.astype(float)
+                except Exception as e:
+                    print(f"Baseline subtraction error: {e}")
 
             # Plot raw/intensity data directly
             CCDplot.a.plot(x_values, data, alpha=alpha, color=self.main_plot_color)
             CCDplot.a.set_ylabel("Intensity")
             CCDplot.a.set_xlabel(x_label)
-            # Set Y-axis range for intensity plot
-            CCDplot.a.set_ylim(-10, 2250)
+            # Set Y-axis range for intensity plot - allow for negative values if baseline subtraction is active
+            if self.baseline_subtract_enabled and self.baseline_data is not None:
+                # Dynamic range when baseline subtraction is active
+                data_min = np.min(data)
+                data_max = np.max(data)
+                y_margin = (data_max - data_min) * 0.1
+                CCDplot.a.set_ylim(data_min - y_margin, data_max + y_margin)
+            else:
+                # Standard range for normal display
+                CCDplot.a.set_ylim(-10, 2250)
         else:
             # plot raw data
-            data = config.rxData16
+            data = config.rxData16.copy()
             try:
                 alpha = float(self.opacity_scale.get()) / 100.0
             except Exception:
@@ -585,13 +718,30 @@ class BuildPanel(ttk.Frame):
                     data = data[::-1]
             except Exception:
                 pass
+            
+            # Apply baseline subtraction if enabled
+            if self.baseline_subtract_enabled and self.baseline_data is not None:
+                try:
+                    # Ensure baseline data has same length as current data
+                    if len(self.baseline_data) == len(data):
+                        data = data.astype(float) - self.baseline_data.astype(float)
+                except Exception as e:
+                    print(f"Baseline subtraction error: {e}")
 
             # Plot raw data directly
             CCDplot.a.plot(x_values, data, alpha=alpha, color=self.main_plot_color)
             CCDplot.a.set_ylabel("ADCcount")
             CCDplot.a.set_xlabel(x_label)
-            # Set Y-axis range for raw data plot
-            CCDplot.a.set_ylim(-10, 4095)
+            # Set Y-axis range for raw data plot - allow for negative values if baseline subtraction is active
+            if self.baseline_subtract_enabled and self.baseline_data is not None:
+                # Dynamic range when baseline subtraction is active
+                data_min = np.min(data)
+                data_max = np.max(data)
+                y_margin = (data_max - data_min) * 0.1
+                CCDplot.a.set_ylim(data_min - y_margin, data_max + y_margin)
+            else:
+                # Standard range for normal display
+                CCDplot.a.set_ylim(-10, 4095)
 
         # Update spectrum background
         self.CCDplot.set_show_colors(self.show_colors.get())
@@ -604,13 +754,13 @@ class BuildPanel(ttk.Frame):
                 pixels = np.arange(n)
                 intensities = data.astype(float)
 
-                # smoothing parameter from slider (map 10..1000 -> 0.0001..0.01)
+                # smoothing parameter from slider (10->no smoothing, 1000->max smoothing)
                 try:
                     sval = float(self.ph_scale.get())
                 except Exception:
                     sval = 100.0
-                # Convert slider value to smoothing factor
-                smooth = max(0.0001, float(sval) / 100000.0)
+                # Convert slider value to smoothing factor (10->0, 1000->49.5)
+                smooth = max(0.0, (sval - 10.0) / 20.0)
 
                 interp_fn, interp_kind = plotgraph.make_interpolator(pixels, intensities, method="spline", smooth=smooth)
                 xs_pix = np.linspace(pixels.min(), pixels.max(), 2000)
@@ -754,11 +904,33 @@ class BuildPanel(ttk.Frame):
             state=tk.DISABLED,
         )
         self.bstop.pack(side=tk.RIGHT, padx=5, pady=5, anchor="e")
+        
+        # Baseline buttons
+        self.baseline_frame = ttk.Frame(self)
+        self.baseline_frame.grid(row=collect_row + 1, columnspan=2, padx=(35, 0), pady=(5, 0))
+        
+        self.save_baseline_btn = ttk.Button(
+            self.baseline_frame,
+            text="Save Baseline",
+            width=15,
+            command=self._save_baseline
+        )
+        self.save_baseline_btn.pack(side=tk.LEFT, padx=5, anchor="w")
+        
+        self.subtract_baseline_btn = ttk.Button(
+            self.baseline_frame,
+            text="Subtract Baseline",
+            width=15,
+            command=lambda: self._toggle_baseline_subtract(self.CCDplot),
+            state="disabled"
+        )
+        self.subtract_baseline_btn.pack(side=tk.RIGHT, padx=5, anchor="e")
+        
         # progressbar
         self.progress = ttk.Progressbar(
             self, variable=progress_var, maximum=10, length=200,
         )
-        self.progress.grid(row=collect_row + 2, columnspan=2, sticky="EW", padx=(45, 5))
+        self.progress.grid(row=collect_row + 3, columnspan=2, sticky="EW", padx=(45, 5))
 
     def plotmodefields(self, plotmode_row, CCDplot):
         # plot mode - variables, widgets and traces associated with the plot mode
@@ -1536,6 +1708,46 @@ class BuildPanel(ttk.Frame):
             self.updateplot(self.CCDplot)
         except Exception:
             pass
+    
+    def _save_baseline(self):
+        """Save the current data as baseline for subtraction."""
+        try:
+            if config.datainvert == 1:
+                self.baseline_data = config.pltData16.copy().astype(float)
+            else:
+                self.baseline_data = config.rxData16.copy().astype(float)
+            
+            # Apply mirroring if enabled (to match what would be plotted)
+            if getattr(config, "datamirror", 0) == 1:
+                self.baseline_data = self.baseline_data[::-1]
+            
+            # Enable the subtract baseline button
+            self.subtract_baseline_btn.config(state="normal")
+            print(f"Baseline saved successfully: min={np.min(self.baseline_data):.2f}, max={np.max(self.baseline_data):.2f}, mean={np.mean(self.baseline_data):.2f}")
+        except Exception as e:
+            print(f"Error saving baseline: {e}")
+            messagebox.showerror("Baseline Error", f"Failed to save baseline: {e}")
+    
+    def _toggle_baseline_subtract(self, CCDplot):
+        """Toggle baseline subtraction on/off."""
+        if self.baseline_data is None:
+            messagebox.showwarning("No Baseline", "Please save a baseline first.")
+            return
+        
+        # Toggle the state
+        self.baseline_subtract_enabled = not self.baseline_subtract_enabled
+        
+        # Update button text to reflect state
+        if self.baseline_subtract_enabled:
+            self.subtract_baseline_btn.config(text="Remove Baseline")
+        else:
+            self.subtract_baseline_btn.config(text="Subtract Baseline")
+        
+        # Update the plot
+        try:
+            self.updateplot(CCDplot)
+        except Exception as e:
+            print(f"Error updating plot with baseline: {e}")
 
     def callback(self):
         self.bopen.config(state=tk.DISABLED)
@@ -1682,32 +1894,6 @@ class BuildPanel(ttk.Frame):
             command=self.open_help_url,
         )
         self.bhelp.pack(side=tk.LEFT, padx=(0, 0))
-    
-         # Add AstroLens logo below the buttons
-        try:
-            from PIL import Image, ImageTk
-            import os
-            
-            # Get the path to the PNG file
-            logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "astrolens.png")
-            
-            if os.path.exists(logo_path):
-                logo_image = Image.open(logo_path)
-                
-                # Calculate proper aspect ratio resize
-                # Original SVG is 645.31 x 172.4 (aspect ratio ~3.74:1)
-                target_width = 350  # Adjust this to your preferred width
-                aspect_ratio = logo_image.width / logo_image.height
-                target_height = int(target_width / aspect_ratio)
-                
-                logo_image = logo_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
-                logo_photo = ImageTk.PhotoImage(logo_image)
-                
-                self.logo_label = ttk.Label(self, image=logo_photo)
-                self.logo_label.image = logo_photo  # Keep a reference
-                self.logo_label.grid(row=about_row + 1, columnspan=3, pady=(15, 5), padx=(7,0))
-        except Exception as e:
-            print(f"Could not load logo: {e}")
 
     def open_help_url(self):
         """Open the help URL in the default browser"""

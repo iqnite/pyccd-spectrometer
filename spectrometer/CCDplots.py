@@ -172,13 +172,16 @@ class BuildPlot(ttk.Frame):
         if self.pan_start is None or (event.inaxes != self.a and event.inaxes != self.ax_top):
             return
 
+        # Get current limits
+        cur_xlim = self.a.get_xlim()
+        cur_ylim = self.a.get_ylim()
+
         dx = event.xdata - self.pan_start[0]
         dy = event.ydata - self.pan_start[1]
 
-        # Calculate new limits
-        assert self.xlim is not None and self.ylim is not None
-        new_xlim = (self.xlim[0] - dx, self.xlim[1] - dx)
-        new_ylim = (self.ylim[0] - dy, self.ylim[1] - dy)
+        # Calculate new limits based on current position
+        new_xlim = (cur_xlim[0] - dx, cur_xlim[1] - dx)
+        new_ylim = (cur_ylim[0] - dy, cur_ylim[1] - dy)
 
         # Apply new limits
         self.a.set_xlim(new_xlim)
