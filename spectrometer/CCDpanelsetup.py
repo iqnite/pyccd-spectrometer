@@ -1098,6 +1098,96 @@ class BuildPanel(ttk.Frame):
             offvalue=0,
         )
         self.ph_check.grid(column=1, row=save_row + 2, sticky="w", padx=5)
+        
+        # Add save regression button next to the checkbox
+        self.bsave_regression = ttk.Button(
+            self,
+            text="",
+            style="Accent.TButton",
+            width=3,
+            state=tk.DISABLED,
+            command=lambda self=self: CCDfiles.savefile_with_regression(self),
+        )
+        self.bsave_regression.grid(column=1, row=save_row + 2, sticky="e", padx=(0, 5))
+        
+        # Add save icon overlay to the regression save button
+        try:
+            from PIL import Image, ImageTk
+            import os
+            
+            # Clear PIL image cache to force reload
+            Image.preinit()
+            Image.init()
+            
+            base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
+            save_icon_black_path = os.path.join(base_dir, "save.png")
+            save_icon_white_path = os.path.join(base_dir, "save_white.png")
+            
+            # Load and prepare both black and white icons
+            self.reg_save_icon_black = None
+            self.reg_save_icon_white = None
+            
+            if os.path.exists(save_icon_black_path):
+                # Force reload by opening with explicit mode
+                save_icon_image = Image.open(save_icon_black_path)
+                save_icon_image.load()  # Force load the image data
+                save_icon_image = save_icon_image.convert("RGBA")
+                
+                # Make the icon solid black while preserving transparency
+                try:
+                    save_alpha = save_icon_image.getchannel("A")
+                except Exception:
+                    save_alpha = save_icon_image.convert("L")
+                save_black_img = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 255))
+                save_icon_solid = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 0))
+                save_icon_solid.paste(save_black_img, (0, 0), mask=save_alpha)
+                
+                # Resize icon
+                target_size = (16, 16)
+                try:
+                    resample = Image.Resampling.LANCZOS
+                except Exception:
+                    resample = Image.LANCZOS
+                save_icon_resized = save_icon_solid.resize(target_size, resample)
+                self.reg_save_icon_black = ImageTk.PhotoImage(save_icon_resized)
+            
+            if os.path.exists(save_icon_white_path):
+                # Force reload by opening with explicit mode
+                save_icon_white_image = Image.open(save_icon_white_path)
+                save_icon_white_image.load()  # Force load the image data
+                save_icon_white_image = save_icon_white_image.convert("RGBA")
+                
+                # Make the icon solid white while preserving transparency
+                try:
+                    save_white_alpha = save_icon_white_image.getchannel("A")
+                except Exception:
+                    save_white_alpha = save_icon_white_image.convert("L")
+                save_white_img = Image.new("RGBA", save_icon_white_image.size, (255, 255, 255, 255))
+                save_icon_white_solid = Image.new("RGBA", save_icon_white_image.size, (0, 0, 0, 0))
+                save_icon_white_solid.paste(save_white_img, (0, 0), mask=save_white_alpha)
+                
+                # Resize icon
+                target_size = (16, 16)
+                try:
+                    resample = Image.Resampling.LANCZOS
+                except Exception:
+                    resample = Image.LANCZOS
+                save_icon_white_resized = save_icon_white_solid.resize(target_size, resample)
+                self.reg_save_icon_white = ImageTk.PhotoImage(save_icon_white_resized)
+            
+            # Place label with icon on top of the button (start with white since button is disabled)
+            if self.reg_save_icon_white:
+                self.icon_overlay_reg = tk.Label(
+                    self.bsave_regression,
+                    image=self.reg_save_icon_white,
+                    bd=0,
+                    cursor="hand2",
+                )
+                self.icon_overlay_reg.image = self.reg_save_icon_white
+                self.icon_overlay_reg.place(relx=0.5, rely=0.5, anchor="center")
+                self.icon_overlay_reg.bind("<Button-1>", lambda e: CCDfiles.savefile_with_regression(self))
+        except Exception as e:
+            print(f"Could not create regression save icon: {e}")
         # Trace the checkbox so we can enable/disable the slider dynamically
         # Also trigger a plot update so the regression overlay appears immediately
         self.ph_checkbox_var.trace_add(

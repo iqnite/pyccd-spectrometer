@@ -143,7 +143,10 @@ def parse_metadata(lines):
         'firmware_mclk': 'N/A',
         'average_count': 'N/A',
         'spectroscopy_mode': 'False',
-        'calibration_coeffs': None
+        'calibration_coeffs': None,
+        'regression_enabled': False,
+        'regression_method': 'spline',
+        'regression_smooth': 0.0
     }
     
     for line in lines:
@@ -231,6 +234,34 @@ def parse_metadata(lines):
                 if coeff_idx < len(parts):
                     coeff_str = parts[coeff_idx]
                     metadata['calibration_coeffs'] = [float(c) for c in coeff_str.split(',')]
+            except:
+                pass
+        
+        # Parse regression parameters
+        if "#Regression-enabled:" in line:
+            parts = line.split()
+            try:
+                enabled_idx = parts.index("#Regression-enabled:") + 1
+                if enabled_idx < len(parts):
+                    metadata['regression_enabled'] = parts[enabled_idx].lower() == 'true'
+            except:
+                pass
+        
+        if "#Regression-method:" in line:
+            parts = line.split()
+            try:
+                method_idx = parts.index("#Regression-method:") + 1
+                if method_idx < len(parts):
+                    metadata['regression_method'] = parts[method_idx]
+            except:
+                pass
+        
+        if "#Regression-smooth:" in line:
+            parts = line.split()
+            try:
+                smooth_idx = parts.index("#Regression-smooth:") + 1
+                if smooth_idx < len(parts):
+                    metadata['regression_smooth'] = float(parts[smooth_idx])
             except:
                 pass
     
@@ -472,6 +503,14 @@ def create_pdf_report(data_file: Path, output_pdf: Path):
         # Format integration time with appropriate unit
         formatted_int_time = format_time_with_unit(metadata['integration_time'])
         
+        # Add regression info if enabled
+        regression_info = ""
+        if metadata['regression_enabled']:
+            regression_info = f"""
+  REGRESSION ANALYSIS                                                                                                           
+  Method:                    {metadata['regression_method']:<25s}   Smooth Factor:             {metadata['regression_smooth']:<25.6f}
+"""
+        
         meta_text = f"""
 -----------------------------------------------------------------------------------------------------------------------------------------
   ACQUISITION PARAMETERS                                                                                                        
@@ -482,7 +521,7 @@ def create_pdf_report(data_file: Path, output_pdf: Path):
   TIMING CONFIGURATION                                                                                                          
   SH Period:                 {metadata['sh_period']:<25s}   ICG Period:                {metadata['icg_period']:<25s}
   Integration Time:          {formatted_int_time:<25s}
-
+{regression_info}
   DATA STATISTICS                                                                                                               
   Average Count:             {metadata['average_count']:<25s}   Total Pixels:              {len(pixels):<25d}
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -491,9 +530,23 @@ def create_pdf_report(data_file: Path, output_pdf: Path):
                 va='top', fontsize=6.5, family='monospace', linespacing=1.3)
         
         # ============= RAW MODE GRAPH =============
-        ax1 = fig.add_axes([0.10, 0.62, 0.85, 0.16])
-        ax1.plot(pixels, adcs, 'k-', linewidth=0.5)
+        ax1 = fig.add_axes([0.10, 0.56, 0.85, 0.16])
+        ax1.plot(pixels, adcs, 'k-', linewidth=0.5, label='Raw Data')
         ax1.axhline(adc_dark, color='k', linestyle=':', linewidth=0.8, alpha=0.7)
+        
+        # Add regression line if enabled
+        if metadata['regression_enabled']:
+            try:
+                smooth = metadata['regression_smooth']
+                method = metadata['regression_method']
+                interp_fn, interp_kind = make_interpolator(pixels, adcs, method=method, smooth=smooth)
+                xs_pix = np.linspace(pixels.min(), pixels.max(), 2000)
+                ys_interp = interp_fn(xs_pix)
+                ys_interp = np.asarray(ys_interp, dtype=float)
+                ax1.plot(xs_pix, ys_interp, 'r-', linewidth=0.9, alpha=0.9, label='Regression')
+            except Exception as e:
+                print(f"Warning: Could not plot regression on raw mode graph: {e}")
+        
         ax1.set_xlabel('PIXEL NUMBER', fontsize=8, weight='bold', family='monospace')
         ax1.set_ylabel('ADC COUNTS', fontsize=8, weight='bold', family='monospace')
         ax1.set_title('RAW MODE: PIXEL vs ADC COUNTS', 
@@ -506,13 +559,32 @@ def create_pdf_report(data_file: Path, output_pdf: Path):
         # Invert y-axis to flip graph vertically
         ax1.invert_yaxis()
         
+        # Add legend if regression is shown
+        if metadata['regression_enabled']:
+            ax1.legend(loc='best', fontsize=6, frameon=True)
+        
         # Shade dummy pixel regions (no label)
         ax1.axvspan(1, 32, alpha=0.1, color='gray')
         ax1.axvspan(3679, 3694, alpha=0.1, color='gray')
         
         # ============= SPECTROSCOPY MODE GRAPH =============
-        ax2 = fig.add_axes([0.10, 0.36, 0.85, 0.16])
-        ax2.plot(wavelengths, intensities, 'k-', linewidth=0.5)
+        ax2 = fig.add_axes([0.10, 0.34, 0.85, 0.16])
+        ax2.plot(wavelengths, intensities, 'k-', linewidth=0.5, label='Spectroscopy Data')
+        
+        # Add regression line if enabled (on wavelength vs intensity)
+        if metadata['regression_enabled']:
+            try:
+                smooth = metadata['regression_smooth']
+                method = metadata['regression_method']
+                # Apply interpolation on the wavelength-intensity data
+                interp_fn, interp_kind = make_interpolator(wavelengths, intensities, method=method, smooth=smooth)
+                xs_wave = np.linspace(wavelengths.min(), wavelengths.max(), 2000)
+                ys_interp = interp_fn(xs_wave)
+                ys_interp = np.asarray(ys_interp, dtype=float)
+                ax2.plot(xs_wave, ys_interp, 'r-', linewidth=0.9, alpha=0.9, label='Regression')
+            except Exception as e:
+                print(f"Warning: Could not plot regression on spectroscopy graph: {e}")
+        
         ax2.set_xlabel('WAVELENGTH (nm)', fontsize=8, weight='bold', family='monospace')
         ax2.set_ylabel('INTENSITY (a.u.)', fontsize=8, weight='bold', family='monospace')
         ax2.set_title('SPECTROSCOPY MODE: WAVELENGTH vs INTENSITY', 
@@ -523,11 +595,15 @@ def create_pdf_report(data_file: Path, output_pdf: Path):
         ax2.spines['bottom'].set_linewidth(0.5)
         ax2.spines['left'].set_linewidth(0.5)
         
+        # Add legend if regression is shown
+        if metadata['regression_enabled']:
+            ax2.legend(loc='best', fontsize=6, frameon=True)
+        
         # ============= CALIBRATION SECTION =============
         # Split into two columns: table on left, graph on right
         
         # Calibration points table (positioned more to the right)
-        cal_y_start = 0.28
+        cal_y_start = 0.22
         cal_table = f"""
 ------------------------------------------------
   CALIBRATION POINTS (4-PT POLYNOMIAL)        
