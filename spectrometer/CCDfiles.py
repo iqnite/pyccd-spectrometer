@@ -84,18 +84,15 @@ def openfile(self, CCDplot):
         
         # Enable save regression button now that data has been loaded
         try:
-            if hasattr(self, 'bsave_regression'):
-                self.bsave_regression.config(state=tk.NORMAL)
-                # Swap icon to black version when enabled
-                if hasattr(self, 'icon_overlay_reg') and hasattr(self, 'reg_save_icon_black') and self.reg_save_icon_black:
-                    self.icon_overlay_reg.config(image=self.reg_save_icon_black)
-                    self.icon_overlay_reg.image = self.reg_save_icon_black
+            if hasattr(self, 'bsave_regression') and hasattr(self, '_set_reg_save_enabled'):
+                self._set_reg_save_enabled(True)
         except Exception as e:
             print(f"Warning: Could not enable save regression button: {e}")
         
         # Enable subtract button now that data has been loaded
         try:
-            self.bsubtract.config(state=tk.NORMAL)
+            if hasattr(self, 'bsubtract'):
+                self.bsubtract.config(state=tk.NORMAL)
         except Exception as e:
             print(f"Warning: Could not enable subtract button: {e}")
 

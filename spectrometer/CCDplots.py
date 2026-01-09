@@ -39,6 +39,8 @@ class BuildPlot(ttk.Frame):
         # Create a hidden frame for the toolbar (NavigationToolbar2Tk uses pack internally)
         toolbar_container = ttk.Frame(self)
         self.navigation_toolbar = NavigationToolbar2Tk(self.canvas, toolbar_container)
+        # Replace the save_figure method to use our spectrum export instead
+        self.navigation_toolbar.save_figure = self.save_spectrum_image
         # Don't grid the toolbar_container at all - keeps it hidden
 
         self.current_data = None  # store last spectrum
@@ -559,3 +561,79 @@ class BuildPlot(ttk.Frame):
         self.canvas.draw()
         self.canvas.flush_events()
         self.canvas.flush_events()
+
+    def save_spectrum_image(self):
+        """Export spectrum visualization as an image file - replaces toolbar save"""
+        from tkinter import filedialog, messagebox
+        import numpy as np
+        
+        try:
+            # Check if we're in spectroscopy mode
+            if not config.spectroscopy_mode:
+                messagebox.showinfo(
+                    "Spectroscopy Mode Required",
+                    "Please enable Spectroscopy Mode to export spectrum images.",
+                    parent=self.master
+                )
+                return
+            
+            # Get currently plotted data from the axes instead of config
+            # This ensures baseline subtraction and other modifications are included
+            lines = self.a.get_lines()
+            if not lines:
+                messagebox.showwarning(
+                    "No Data",
+                    "No spectrum data to export.",
+                    parent=self.master
+                )
+                return
+            
+            # Find the main spectrum line (first non-comparison line)
+            main_line = None
+            for line in lines:
+                label = line.get_label()
+                # Skip comparison data and regression lines
+                if label and ('comparison' not in label.lower() and 'interpolated' not in label.lower()):
+                    main_line = line
+                    break
+            
+            if main_line is None:
+                main_line = lines[0]  # Fallback to first line
+            
+            # Extract wavelengths and intensities from the plotted line
+            wavelengths = main_line.get_xdata()
+            intensities = main_line.get_ydata()
+            
+            # Ask user for filename
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".png",
+                title="Export Spectrum Image",
+                filetypes=[("PNG files", "*.png"), ("All files", "*.*")],
+                parent=self.master
+            )
+            
+            if not filename:
+                return
+            
+            # Import and generate spectrum image
+            from spectrometer.spectrum_image_export import save_spectrum_image
+            
+            # Use bar mode with nanometer scale at high resolution
+            save_spectrum_image(wavelengths, intensities, filename, 
+                              width=2400, height=300, bar_mode=True)
+            
+            messagebox.showinfo(
+                "Export Successful",
+                f"Spectrum image saved to:\n{filename}",
+                parent=self.master
+            )
+            
+        except Exception as e:
+            messagebox.showerror(
+                "Export Failed",
+                f"Could not export spectrum image:\n{str(e)}",
+                parent=self.master
+            )
+            print(f"Spectrum export error: {e}")
+            import traceback
+            traceback.print_exc()

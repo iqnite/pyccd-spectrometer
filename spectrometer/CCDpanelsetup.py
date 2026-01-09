@@ -76,6 +76,9 @@ class BuildPanel(ttk.Frame):
         self.baseline_data = None
         self.baseline_subtract_enabled = False
 
+        # Track whether we've auto-opened calibration during this run
+        self.calibration_prompted = False
+
         # Create all widgets and space between them
         self.header_fields()
         self.grid_rowconfigure(1, minsize=25)  # Add space after header
@@ -253,8 +256,9 @@ class BuildPanel(ttk.Frame):
         """Handle mode switching"""
         config.spectroscopy_mode = bool(self.mode_var.get())
 
-        if config.spectroscopy_mode:
-            # Auto-open calibration window in spectroscopy mode
+        if config.spectroscopy_mode and not self.calibration_prompted:
+            # Auto-open calibration window only on first switch this session
+            self.calibration_prompted = True
             default_calibration.open_calibration_window(
                 self.master, on_apply_callback=self.CCDplot.replot_current_spectrum
             )
@@ -1032,9 +1036,7 @@ class BuildPanel(ttk.Frame):
 
         self.bopen.pack(side=tk.LEFT, padx=(5, 0), pady=5)
         self.bsave.pack(side=tk.LEFT, padx=(5, 0), pady=5)
-        self.bcalib.pack(
-            side=tk.LEFT, padx=(5, 0), pady=5
-        )  # Add some padding to separate from save button
+        self.bcalib.pack(side=tk.LEFT, padx=(5, 0), pady=5)
 
         # Now overlay the icon image on top of the buttons
         try:
@@ -1175,17 +1177,10 @@ class BuildPanel(ttk.Frame):
                 save_icon_white_resized = save_icon_white_solid.resize(target_size, resample)
                 self.reg_save_icon_white = ImageTk.PhotoImage(save_icon_white_resized)
             
-            # Place label with icon on top of the button (start with white since button is disabled)
-            if self.reg_save_icon_white:
-                self.icon_overlay_reg = tk.Label(
-                    self.bsave_regression,
-                    image=self.reg_save_icon_white,
-                    bd=0,
-                    cursor="hand2",
-                )
-                self.icon_overlay_reg.image = self.reg_save_icon_white
-                self.icon_overlay_reg.place(relx=0.5, rely=0.5, anchor="center")
-                self.icon_overlay_reg.bind("<Button-1>", lambda e: CCDfiles.savefile_with_regression(self))
+            # Resolve the background color of the accent button so the overlay blends in
+            # Initialize button appearance and helper for swapping enabled/disabled icons
+            self.bsave_regression.config(compound="center", padding=(4, 2))
+            self._set_reg_save_enabled(False)
         except Exception as e:
             print(f"Could not create regression save icon: {e}")
         # Trace the checkbox so we can enable/disable the slider dynamically
@@ -1733,6 +1728,40 @@ class BuildPanel(ttk.Frame):
             except Exception:
                 pass
 
+    def _set_reg_save_enabled(self, enabled: bool):
+        """Set regression save button state and icon consistently."""
+        if not hasattr(self, "bsave_regression"):
+            return
+
+        img = None
+        try:
+            if enabled:
+                # Enabled: black icon if available
+                if hasattr(self, "reg_save_icon_black") and self.reg_save_icon_black:
+                    img = self.reg_save_icon_black
+            else:
+                # Disabled: white icon if available
+                if hasattr(self, "reg_save_icon_white") and self.reg_save_icon_white:
+                    img = self.reg_save_icon_white
+        except Exception:
+            pass
+
+        try:
+            state = tk.NORMAL if enabled else tk.DISABLED
+            try:
+                self.bsave_regression.state(["!disabled"] if enabled else ["disabled"])
+            except Exception:
+                self.bsave_regression.config(state=state)
+        except Exception:
+            pass
+
+        if img:
+            try:
+                self.bsave_regression.config(image=img)
+                self.bsave_regression.image = img
+            except Exception:
+                pass
+
     def _ph_check_changed(self):
         """Enable or disable the placeholder slider based on the checkbox state
 
@@ -1753,6 +1782,12 @@ class BuildPanel(ttk.Frame):
                 self.ph_label.config(fg="#ffffff")
             except Exception:
                 pass
+
+            # Enable regression save button when regression is active
+            try:
+                self._set_reg_save_enabled(True)
+            except Exception:
+                pass
         else:
             # disable the scale
             try:
@@ -1765,6 +1800,12 @@ class BuildPanel(ttk.Frame):
             # dim label
             try:
                 self.ph_label.config(fg="#888888")
+            except Exception:
+                pass
+
+            # Keep regression save button disabled when regression is off
+            try:
+                self._set_reg_save_enabled(False)
             except Exception:
                 pass
 

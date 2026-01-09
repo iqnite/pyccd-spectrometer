@@ -9,13 +9,13 @@ from matplotlib.figure import Figure
 # Calibration data file
 CALIBRATION_FILE = "calibration_params.json"
 
-# Default calibration points (your original 4-point polynomial)
+# Default calibration points (4-point polynomial)
 default_calibration_data = {
     "points": [
-        {"pixel": 0, "wavelength": 350.0},
-        {"pixel": 1231, "wavelength": 532.0},
-        {"pixel": 2462, "wavelength": 700.0},
-        {"pixel": 3693, "wavelength": 800.0},
+        {"pixel": 265, "wavelength": 447.15},
+        {"pixel": 775, "wavelength": 492.19},
+        {"pixel": 2120, "wavelength": 587.58},
+        {"pixel": 3489, "wavelength": 650.65},
     ]
 }
 
