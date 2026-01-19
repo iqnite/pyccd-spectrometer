@@ -35,6 +35,8 @@ jobs:
                   path: dist/pySPEC.exe
     build-macos:
         runs-on: macos-latest
+        permissions:
+            contents: read
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
