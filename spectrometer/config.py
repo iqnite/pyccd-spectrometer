@@ -3,6 +3,7 @@ import numpy as np
 # serial definitions
 port = "COM5"
 baudrate = 115200
+saved_firmware = "STM32F40x"
 
 # Data as the program handles
 SHperiod = np.uint32(200)
