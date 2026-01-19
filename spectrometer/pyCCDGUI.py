@@ -72,7 +72,9 @@ def _on_mousewheel(event):
     canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
 
-canvas.bind_all("<MouseWheel>", _on_mousewheel)
+canvas.bind("<MouseWheel>", _on_mousewheel)
+for child in scrollable_frame.winfo_children():
+    child.bind("<MouseWheel>", _on_mousewheel)
 
 root.grid_rowconfigure(0, weight=1)
 root.grid_columnconfigure(0, weight=1)  # Plot column expands
