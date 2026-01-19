@@ -187,8 +187,6 @@ class BuildPanel(ttk.Frame):
                 fill="black",
                 width=scale * 2,
             )
-            text_x = 0
-            text_y = 0
 
         # Scale down for smooth anti-aliased result
         self.button_img = self.button_img.resize(
