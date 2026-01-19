@@ -626,7 +626,7 @@ class BuildPlot(ttk.Frame):
         self.canvas.flush_events()
         self.canvas.flush_events()
 
-    def save_spectrum_image(self):
+    def save_spectrum_image(self, *_):
         """Export spectrum visualization as an image file - replaces toolbar save"""
         from tkinter import filedialog, messagebox
         import numpy as np
@@ -656,8 +656,8 @@ class BuildPlot(ttk.Frame):
                 label = line.get_label()
                 # Skip comparison data and regression lines
                 if label and (
-                    "comparison" not in label.lower()
-                    and "interpolated" not in label.lower()
+                    "comparison" not in getattr(label, "lower", lambda: "")()
+                    and "interpolated" not in getattr(label, "lower", lambda: "")()
                 ):
                     main_line = line
                     break
