@@ -160,6 +160,9 @@ class BuildPanel(ttk.Frame):
                 font = None
 
         text = "X"
+        text_x = 0
+        text_y = 0
+        padding = 0
         if font:
             bbox = draw.textbbox((0, 0), text, font=font)
             text_width = bbox[2] - bbox[0]
@@ -167,7 +170,6 @@ class BuildPanel(ttk.Frame):
             text_x = (high_res_size - text_width) // 2 - bbox[0]
             text_y = (high_res_size - text_height) // 2 - bbox[1]
             draw.text((text_x, text_y), text, fill="black", font=font)
-            padding = 0
         else:
             # Fallback: draw X as two lines
             padding = high_res_size // 4
