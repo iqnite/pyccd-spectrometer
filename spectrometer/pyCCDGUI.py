@@ -48,18 +48,38 @@ enter_fullscreen()
 
 SerQueue = queue.Queue()
 
-# Build menu, plot frame, and control panel
 CCDplot = CCDplots.BuildPlot(root)
-panel = CCDpanelsetup.BuildPanel(root, CCDplot, SerQueue)
+panel_container = tk.Frame(root)
+canvas = tk.Canvas(panel_container, highlightthickness=0)
+scrollbar = tk.Scrollbar(panel_container, orient="vertical", command=canvas.yview)
+scrollable_frame = tk.Frame(canvas)
 
-# Configure root window for expansion
+panel = CCDpanelsetup.BuildPanel(scrollable_frame, CCDplot, SerQueue)
+panel.pack(fill="both", expand=True)
+
+scrollable_frame.bind(
+    "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+)
+
+canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+canvas.configure(yscrollcommand=scrollbar.set)
+
+canvas.pack(side="left", fill="both", expand=True)
+scrollbar.pack(side="right", fill="y")
+
+
+def _on_mousewheel(event):
+    canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+
+canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
 root.grid_rowconfigure(0, weight=1)
 root.grid_columnconfigure(0, weight=1)  # Plot column expands
 root.grid_columnconfigure(1, weight=0)  # Panel column fixed
 
-# Place widgets with proper expansion
 CCDplot.grid(row=0, column=0, sticky="nsew")
-panel.grid(row=0, column=1, sticky="ns", padx=(35, 0))
+panel_container.grid(row=0, column=1, sticky="ns", padx=(35, 0))
 
 
 def main():
