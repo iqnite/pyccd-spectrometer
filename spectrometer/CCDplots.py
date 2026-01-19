@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 import json
 import os
+import sys
 
 matplotlib.use("TkAgg")
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -24,12 +25,12 @@ class BuildPlot(ttk.Frame):
         # Remove fixed figsize so it can expand
         self.f = Figure(dpi=100, tight_layout=True)
         self.a = self.f.add_subplot(111)
-        
+
         # Create secondary x-axis at the top for markers
         self.ax_top = self.a.twiny()
-        self.ax_top.set_xlabel('')
+        self.ax_top.set_xlabel("")
         self.ax_top.set_xticks([])  # Start with no ticks
-        
+
         self.canvas = FigureCanvasTkAgg(self.f, master=self)
         self.canvas.draw()
 
@@ -55,10 +56,14 @@ class BuildPlot(ttk.Frame):
         self.show_colors = False
 
         # Storage for user-placed markers
-        self.markers = []  # List of (line, label_text, x_pos, element_text_obj, label_text_obj) tuples
+        self.markers = (
+            []
+        )  # List of (line, label_text, x_pos, element_text_obj, label_text_obj) tuples
         self.element_matching_enabled = False
-        self.emission_line_color = "red"  # Default color for emission lines when not matched
-        
+        self.emission_line_color = (
+            "red"  # Default color for emission lines when not matched
+        )
+
         # Load element emission lines data
         self.emission_lines = self._load_emission_lines()
 
@@ -138,10 +143,10 @@ class BuildPlot(ttk.Frame):
         # Apply new limits
         self.a.set_xlim(tuple(new_xlim))
         self.a.set_ylim(tuple(new_ylim))
-        
+
         # Sync top axis
         self.ax_top.set_xlim(tuple(new_xlim))
-        
+
         self.canvas.draw_idle()
 
     def on_mouse_press(self, event):
@@ -150,7 +155,7 @@ class BuildPlot(ttk.Frame):
             return
 
         # Don't allow marker creation/deletion when zoom or pan tool is active
-        if hasattr(self.navigation_toolbar, 'mode') and self.navigation_toolbar.mode:
+        if hasattr(self.navigation_toolbar, "mode") and self.navigation_toolbar.mode:
             return
 
         if event.button == 1:  # Left mouse button - add marker
@@ -171,7 +176,9 @@ class BuildPlot(ttk.Frame):
 
     def on_mouse_motion(self, event):
         """Pan the graph when middle mouse button is held down"""
-        if self.pan_start is None or (event.inaxes != self.a and event.inaxes != self.ax_top):
+        if self.pan_start is None or (
+            event.inaxes != self.a and event.inaxes != self.ax_top
+        ):
             return
 
         # Get current limits
@@ -188,10 +195,10 @@ class BuildPlot(ttk.Frame):
         # Apply new limits
         self.a.set_xlim(new_xlim)
         self.a.set_ylim(new_ylim)
-        
+
         # Sync top axis
         self.ax_top.set_xlim(new_xlim)
-        
+
         self.canvas.draw_idle()
 
     def reset_view(self):
@@ -217,14 +224,14 @@ class BuildPlot(ttk.Frame):
         self.clear_markers()
 
         self.a.clear()
-        
+
         # Recreate top axis to clear any artifacts
-        if hasattr(self, 'ax_top'):
+        if hasattr(self, "ax_top"):
             self.ax_top.remove()
         self.ax_top = self.a.twiny()
-        self.ax_top.set_xlabel('')
+        self.ax_top.set_xlabel("")
         self.ax_top.set_xticks([])
-        
+
         self.a.plot(x_values, ccd_data, color="blue")
         self.a.set_xlabel(x_label)
         self.a.set_ylabel("Intensity")
@@ -254,14 +261,14 @@ class BuildPlot(ttk.Frame):
         """Add a vertical marker line at the specified x position"""
         if x_pos is None:
             return
-        
+
         # Get current x-axis limits
         xlim = self.a.get_xlim()
-        
+
         # Validate x_pos is within bounds and not at the origin (likely a bug)
         if x_pos < xlim[0] or x_pos > xlim[1]:
             return
-        
+
         # Ignore clicks very close to zero (likely unintended)
         if abs(x_pos) < (xlim[1] - xlim[0]) * 0.001:
             return
@@ -281,7 +288,9 @@ class BuildPlot(ttk.Frame):
             color = self.emission_line_color
 
         # Create vertical line
-        line = self.a.axvline(x=x_pos, color=color, linewidth=1, linestyle="-", alpha=0.7)
+        line = self.a.axvline(
+            x=x_pos, color=color, linewidth=1, linestyle="-", alpha=0.7
+        )
 
         # Determine label based on spectroscopy mode (without units)
         if config.spectroscopy_mode:
@@ -291,8 +300,9 @@ class BuildPlot(ttk.Frame):
 
         # Add wavelength number annotation with styled box
         from matplotlib.transforms import blended_transform_factory
+
         trans = blended_transform_factory(self.a.transData, self.a.transAxes)
-        
+
         label_text_obj = self.a.text(
             x_pos,
             0.98,  # 98% from bottom in axes coordinates (at the very top)
@@ -303,7 +313,9 @@ class BuildPlot(ttk.Frame):
             fontsize=9,
             color=color,
             transform=trans,
-            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=color, alpha=0.9),
+            bbox=dict(
+                boxstyle="round,pad=0.3", facecolor="white", edgecolor=color, alpha=0.9
+            ),
             clip_on=True,
             animated=False,
         )
@@ -314,7 +326,7 @@ class BuildPlot(ttk.Frame):
             # Create multi-line label with all matching elements (sorted best to worst)
             element_labels = [elem for elem, pct in element_matches]
             element_text = "\n".join(element_labels)
-            
+
             element_text_obj = self.a.text(
                 x_pos,
                 0.90,  # 90% from bottom in axes coordinates (below wavelength number)
@@ -326,7 +338,12 @@ class BuildPlot(ttk.Frame):
                 fontweight="bold",
                 color=color,
                 transform=trans,
-                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=color, alpha=0.9),
+                bbox=dict(
+                    boxstyle="round,pad=0.3",
+                    facecolor="white",
+                    edgecolor=color,
+                    alpha=0.9,
+                ),
                 clip_on=True,
                 animated=False,
             )
@@ -347,7 +364,7 @@ class BuildPlot(ttk.Frame):
             return
 
         # Don't allow deletion when zoom or pan tool is active
-        if hasattr(self.navigation_toolbar, 'mode') and self.navigation_toolbar.mode:
+        if hasattr(self.navigation_toolbar, "mode") and self.navigation_toolbar.mode:
             return
 
         # Find the closest marker
@@ -366,7 +383,9 @@ class BuildPlot(ttk.Frame):
         threshold = abs(xlim[1] - xlim[0]) * 0.01
 
         if closest_marker and min_distance < threshold:
-            line, label_text, marker_x, element_text, label_text_annotation = closest_marker
+            line, label_text, marker_x, element_text, label_text_annotation = (
+                closest_marker
+            )
             line.remove()
             if element_text:
                 element_text.remove()
@@ -379,7 +398,7 @@ class BuildPlot(ttk.Frame):
 
     def update_axis_ticks(self):
         """Keep the secondary axis aligned without showing duplicate labels."""
-        if not hasattr(self, 'ax_top') or self.ax_top is None:
+        if not hasattr(self, "ax_top") or self.ax_top is None:
             return
 
         # Always keep limits in sync with the main axis
@@ -391,42 +410,54 @@ class BuildPlot(ttk.Frame):
 
     def clear_markers(self):
         """Remove all markers"""
-        for line, label_text, x_pos, element_text, label_text_annotation in self.markers:
+        for (
+            line,
+            label_text,
+            x_pos,
+            element_text,
+            label_text_annotation,
+        ) in self.markers:
             line.remove()
             if element_text:
                 element_text.remove()
             if label_text_annotation:
                 label_text_annotation.remove()
         self.markers.clear()
-        
+
         # Completely clear top axis
-        if hasattr(self, 'ax_top'):
+        if hasattr(self, "ax_top"):
             self.ax_top.cla()
-            self.ax_top.set_xlabel('')
+            self.ax_top.set_xlabel("")
             self.ax_top.set_xticks([])
             self.ax_top.set_xticklabels([])
             # Re-sync limits
             self.ax_top.set_xlim(self.a.get_xlim())
-        
+
         self.canvas.draw()
         self.canvas.flush_events()
 
     def _load_emission_lines(self):
         """Load element emission lines from JSON file"""
         try:
-            # Get the directory of the current file
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            json_path = os.path.join(current_dir, 'element_emission_lines.json')
-            
-            with open(json_path, 'r') as f:
+            # Determine base path (works in both dev and frozen PyInstaller environments)
+            if getattr(sys, "frozen", False):
+                # Running as compiled executable
+                base_path = getattr(sys, "_MEIPASS", os.path.dirname(__file__))
+            else:
+                # Running as script - go up one level from spectrometer/ to project root
+                base_path = os.path.dirname(os.path.dirname(__file__))
+
+            json_path = os.path.join(base_path, "element_emission_lines.json")
+
+            with open(json_path, "r") as f:
                 data = json.load(f)
-            
+
             # Create list of (wavelength, element) tuples
             wavelength_elements = []
             for element, wavelengths in data.items():
                 for wavelength in wavelengths:
                     wavelength_elements.append((wavelength, element))
-            
+
             # Sort by wavelength
             return sorted(wavelength_elements, key=lambda x: x[0])
         except Exception as e:
@@ -435,71 +466,84 @@ class BuildPlot(ttk.Frame):
 
     def _get_marker_color_and_elements(self, wavelength):
         """Calculate marker color and element names based on proximity to known emission lines
-        
+
         Returns: (color, list of (element_name, match_percentage) sorted by percentage desc)
         """
         if not self.emission_lines or not config.spectroscopy_mode:
-            return ('red', [])
-        
+            return ("red", [])
+
         # Find all emission lines and calculate match percentages
         element_matches = []
-        
+
         for emission_wavelength, element in self.emission_lines:
             distance = abs(wavelength - emission_wavelength)
-            
+
             # Calculate match percentage based on distance
             # Use configurable thresholds from config
             green_threshold = config.green_tolerance_nm
             yellow_threshold = config.yellow_tolerance_nm
-            
+
             if distance <= green_threshold:
                 # Within green tolerance: 90-100% match
                 match_percentage = 100 - (distance / green_threshold) * 10
             elif distance <= yellow_threshold:
                 # Within yellow tolerance: 80-90% match
-                match_percentage = 90 - ((distance - green_threshold) / (yellow_threshold - green_threshold)) * 10
+                match_percentage = (
+                    90
+                    - (
+                        (distance - green_threshold)
+                        / (yellow_threshold - green_threshold)
+                    )
+                    * 10
+                )
             else:
                 # Beyond yellow tolerance, skip this element
                 continue
-            
+
             # Only include matches >= 80%
             if match_percentage >= 80:
                 element_matches.append((element, match_percentage, distance))
-        
+
         # Sort by match percentage (highest first), then by distance if tied
         element_matches.sort(key=lambda x: (-x[1], x[2]))
-        
+
         # Determine color based on best match percentage
         if element_matches:
             best_match = element_matches[0][1]
             if best_match >= 90:
-                color = 'green'
+                color = "green"
             else:  # >= 80
-                color = '#ffc200'
-            
+                color = "#ffc200"
+
             # Return color and list of (element, percentage) tuples
             return (color, [(elem, pct) for elem, pct, _ in element_matches])
         else:
-            return ('red', [])
+            return ("red", [])
 
     def update_marker_colors(self, enabled):
         """Update marker colors based on element matching setting"""
         self.element_matching_enabled = enabled
-        
+
         # Update colors even if not in spectroscopy mode (to reset to red)
         if not self.markers:
             return
-        
+
         ylim = self.a.get_ylim()
-        
-        for i, (line, label_text, x_pos, old_element_text, old_label_text_obj) in enumerate(self.markers):
+
+        for i, (
+            line,
+            label_text,
+            x_pos,
+            old_element_text,
+            old_label_text_obj,
+        ) in enumerate(self.markers):
             # Remove old element text if it exists
             if old_element_text:
                 old_element_text.remove()
             # Remove old label text if it exists
             if old_label_text_obj:
                 old_label_text_obj.remove()
-            
+
             # Calculate new color and elements
             element_text_obj = None
             if config.spectroscopy_mode:
@@ -512,7 +556,10 @@ class BuildPlot(ttk.Frame):
                         element_text = "\n".join(element_labels)
 
                         from matplotlib.transforms import blended_transform_factory
-                        trans = blended_transform_factory(self.a.transData, self.a.transAxes)
+
+                        trans = blended_transform_factory(
+                            self.a.transData, self.a.transAxes
+                        )
 
                         element_text_obj = self.a.text(
                             x_pos,
@@ -525,7 +572,12 @@ class BuildPlot(ttk.Frame):
                             fontweight="bold",
                             color=color,
                             transform=trans,
-                            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=color, alpha=0.9),
+                            bbox=dict(
+                                boxstyle="round,pad=0.3",
+                                facecolor="white",
+                                edgecolor=color,
+                                alpha=0.9,
+                            ),
                             clip_on=True,
                             animated=False,
                         )
@@ -533,13 +585,14 @@ class BuildPlot(ttk.Frame):
                     color = "#ff0000"
             else:
                 color = self.emission_line_color
-            
+
             line.set_color(color)
-            
+
             # Recreate label text annotation with new color
             from matplotlib.transforms import blended_transform_factory
+
             trans = blended_transform_factory(self.a.transData, self.a.transAxes)
-            
+
             label_text_obj = self.a.text(
                 x_pos,
                 0.98,
@@ -550,14 +603,25 @@ class BuildPlot(ttk.Frame):
                 fontsize=9,
                 color=color,
                 transform=trans,
-                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor=color, alpha=0.9),
+                bbox=dict(
+                    boxstyle="round,pad=0.3",
+                    facecolor="white",
+                    edgecolor=color,
+                    alpha=0.9,
+                ),
                 clip_on=True,
                 animated=False,
             )
-            
+
             # Update marker with new element text and label text
-            self.markers[i] = (line, label_text, x_pos, element_text_obj, label_text_obj)
-        
+            self.markers[i] = (
+                line,
+                label_text,
+                x_pos,
+                element_text_obj,
+                label_text_obj,
+            )
+
         self.canvas.draw()
         self.canvas.flush_events()
         self.canvas.flush_events()
@@ -566,74 +630,82 @@ class BuildPlot(ttk.Frame):
         """Export spectrum visualization as an image file - replaces toolbar save"""
         from tkinter import filedialog, messagebox
         import numpy as np
-        
+
         try:
             # Check if we're in spectroscopy mode
             if not config.spectroscopy_mode:
                 messagebox.showinfo(
                     "Spectroscopy Mode Required",
                     "Please enable Spectroscopy Mode to export spectrum images.",
-                    parent=self.master
+                    parent=self.master,
                 )
                 return
-            
+
             # Get currently plotted data from the axes instead of config
             # This ensures baseline subtraction and other modifications are included
             lines = self.a.get_lines()
             if not lines:
                 messagebox.showwarning(
-                    "No Data",
-                    "No spectrum data to export.",
-                    parent=self.master
+                    "No Data", "No spectrum data to export.", parent=self.master
                 )
                 return
-            
+
             # Find the main spectrum line (first non-comparison line)
             main_line = None
             for line in lines:
                 label = line.get_label()
                 # Skip comparison data and regression lines
-                if label and ('comparison' not in label.lower() and 'interpolated' not in label.lower()):
+                if label and (
+                    "comparison" not in label.lower()
+                    and "interpolated" not in label.lower()
+                ):
                     main_line = line
                     break
-            
+
             if main_line is None:
                 main_line = lines[0]  # Fallback to first line
-            
+
             # Extract wavelengths and intensities from the plotted line
             wavelengths = main_line.get_xdata()
             intensities = main_line.get_ydata()
-            
+
             # Ask user for filename
             filename = filedialog.asksaveasfilename(
                 defaultextension=".png",
                 title="Export Spectrum Image",
                 filetypes=[("PNG files", "*.png"), ("All files", "*.*")],
-                parent=self.master
+                parent=self.master,
             )
-            
+
             if not filename:
                 return
-            
+
             # Import and generate spectrum image
             from spectrometer.spectrum_image_export import save_spectrum_image
-            
+
             # Use bar mode with nanometer scale at high resolution
-            save_spectrum_image(wavelengths, intensities, filename, 
-                              width=2400, height=300, bar_mode=True)
-            
+            save_spectrum_image(
+                wavelengths,
+                intensities,
+                filename,
+                width=2400,
+                height=300,
+                bar_mode=True,
+            )
+
             messagebox.showinfo(
                 "Export Successful",
                 f"Spectrum image saved to:\n{filename}",
-                parent=self.master
+                parent=self.master,
             )
-            
+
         except Exception as e:
             messagebox.showerror(
                 "Export Failed",
                 f"Could not export spectrum image:\n{str(e)}",
-                parent=self.master
+                parent=self.master,
             )
             print(f"Spectrum export error: {e}")
             import traceback
+
             traceback.print_exc()
