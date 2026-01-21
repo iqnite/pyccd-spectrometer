@@ -86,9 +86,7 @@ for child in scrollable_frame.winfo_children():
 
 root.grid_rowconfigure(0, weight=1)
 root.grid_columnconfigure(0, weight=1)  # Plot column expands
-root.grid_columnconfigure(
-    1, weight=0, minsize=400
-)  # Panel column fixed but with minimum width
+root.grid_columnconfigure(1, weight=0, minsize=470)
 
 CCDplot.grid(row=0, column=0, sticky="nsew")
 panel_container.grid(
