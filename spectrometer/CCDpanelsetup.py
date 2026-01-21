@@ -24,7 +24,6 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
-import sys
 import tkinter as tk
 from tkinter import ttk, colorchooser, messagebox, filedialog
 import numpy as np
