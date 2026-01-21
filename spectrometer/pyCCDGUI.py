@@ -48,18 +48,52 @@ enter_fullscreen()
 
 SerQueue = queue.Queue()
 
-# Build menu, plot frame, and control panel
 CCDplot = CCDplots.BuildPlot(root, config.Config())
-panel = CCDpanelsetup.BuildPanel(root, CCDplot, SerQueue)
+panel_container = tk.Frame(root)
+canvas = tk.Canvas(panel_container, highlightthickness=0)
+scrollbar = tk.Scrollbar(panel_container, orient="vertical", command=canvas.yview)
+scrollable_frame = tk.Frame(canvas)
 
-# Configure root window for expansion
+panel = CCDpanelsetup.BuildPanel(scrollable_frame, CCDplot, SerQueue)
+panel.pack(fill="both", expand=True)
+
+
+def update_scroll_region(event=None):
+    canvas.configure(scrollregion=canvas.bbox("all"))
+    # Update canvas window width to match the scrollable_frame's required width
+    canvas.itemconfig(canvas_window, width=scrollable_frame.winfo_reqwidth())
+
+
+scrollable_frame.bind("<Configure>", update_scroll_region)
+
+canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+canvas.configure(yscrollcommand=scrollbar.set)
+
+# Use grid instead of pack for better control over scrollbar placement
+panel_container.grid_rowconfigure(0, weight=1)
+panel_container.grid_columnconfigure(0, weight=1)
+canvas.grid(row=0, column=0, sticky="nsew")
+scrollbar.grid(row=0, column=1, sticky="ns")
+
+
+def _on_mousewheel(event):
+    canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+
+canvas.bind("<MouseWheel>", _on_mousewheel)
+for child in scrollable_frame.winfo_children():
+    child.bind("<MouseWheel>", _on_mousewheel)
+
 root.grid_rowconfigure(0, weight=1)
 root.grid_columnconfigure(0, weight=1)  # Plot column expands
-root.grid_columnconfigure(1, weight=0)  # Panel column fixed
+root.grid_columnconfigure(
+    1, weight=0, minsize=400
+)  # Panel column fixed but with minimum width
 
-# Place widgets with proper expansion
 CCDplot.grid(row=0, column=0, sticky="nsew")
-panel.grid(row=0, column=1, sticky="ns", padx=(35, 0))
+panel_container.grid(
+    row=0, column=1, sticky="nsew", padx=(35, 0)
+)  # Changed to nsew to allow horizontal expansion
 
 
 def main():

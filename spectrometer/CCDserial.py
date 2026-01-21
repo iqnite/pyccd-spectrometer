@@ -44,11 +44,13 @@ import time
 # byte[12]: The number of integrations to average
 def rxtx(panel, SerQueue, progress_var, config: Config):
     threadser = None
-    if config.AVGn[0] == 0:
+    if config.avg_n[0] == 0:
         threadser = threading.Thread(
-            target=rxtxoncethread, args=(panel, SerQueue, progress_var, config), daemon=True
+            target=rxtxoncethread,
+            args=(panel, SerQueue, progress_var, config),
+            daemon=True,
         )
-    elif config.AVGn[0] == 1:
+    elif config.avg_n[0] == 1:
         threadser = threading.Thread(
             target=rxtxcontthread, args=(panel, progress_var, config), daemon=True
         )
@@ -81,7 +83,7 @@ def rxtxoncethread(panel, SerQueue, progress_var, config: Config):
 
         # Determine hardware vs software averaging
         # Firmware supports max 15 averages, so for >15 we need software averaging
-        requested_avg = config.AVGn[1]
+        requested_avg = config.avg_n[1]
         if requested_avg <= 15:
             # Use hardware averaging only
             hardware_avg = requested_avg
@@ -99,16 +101,16 @@ def rxtxoncethread(panel, SerQueue, progress_var, config: Config):
         config.txfull[0] = 69
         config.txfull[1] = 82
         # split 32-bit integers to be sent into 8-bit data
-        config.txfull[2] = (config.SHperiod >> 24) & 0xFF
-        config.txfull[3] = (config.SHperiod >> 16) & 0xFF
-        config.txfull[4] = (config.SHperiod >> 8) & 0xFF
-        config.txfull[5] = config.SHperiod & 0xFF
-        config.txfull[6] = (config.ICGperiod >> 24) & 0xFF
-        config.txfull[7] = (config.ICGperiod >> 16) & 0xFF
-        config.txfull[8] = (config.ICGperiod >> 8) & 0xFF
-        config.txfull[9] = config.ICGperiod & 0xFF
+        config.txfull[2] = (config.sh_period >> 24) & 0xFF
+        config.txfull[3] = (config.sh_period >> 16) & 0xFF
+        config.txfull[4] = (config.sh_period >> 8) & 0xFF
+        config.txfull[5] = config.sh_period & 0xFF
+        config.txfull[6] = (config.icg_period >> 24) & 0xFF
+        config.txfull[7] = (config.icg_period >> 16) & 0xFF
+        config.txfull[8] = (config.icg_period >> 8) & 0xFF
+        config.txfull[9] = config.icg_period & 0xFF
         # averages to perfom (send hardware average count)
-        config.txfull[10] = config.AVGn[0]
+        config.txfull[10] = config.avg_n[0]
         config.txfull[11] = hardware_avg
 
         # Perform software averaging by collecting multiple times
@@ -140,13 +142,15 @@ def rxtxoncethread(panel, SerQueue, progress_var, config: Config):
             # If we did software averaging, compute the average
             if software_iterations > 1:
                 for rxi in range(3694):
-                    config.rxData16[rxi] = np.uint16(np.round(accumulated_data[rxi] / software_iterations))
+                    config.rxData16[rxi] = np.uint16(
+                        np.round(accumulated_data[rxi] / software_iterations)
+                    )
 
             # plot the new data
             panel.bupdate.invoke()
             # hold values for saving data to file as the SHperiod and ICGperiod may be updated after acquisition
-            config.SHsent = config.SHperiod
-            config.ICGsent = config.ICGperiod
+            config.sh_sent = config.sh_period
+            config.icg_sent = config.icg_period
 
         SerQueue.queue.clear()
 
@@ -181,17 +185,17 @@ def rxtxcontthread(panel, progress_var, config: Config):
         config.txfull[0] = 69
         config.txfull[1] = 82
         # split 32-bit integers to be sent into 8-bit data
-        config.txfull[2] = (config.SHperiod >> 24) & 0xFF
-        config.txfull[3] = (config.SHperiod >> 16) & 0xFF
-        config.txfull[4] = (config.SHperiod >> 8) & 0xFF
-        config.txfull[5] = config.SHperiod & 0xFF
-        config.txfull[6] = (config.ICGperiod >> 24) & 0xFF
-        config.txfull[7] = (config.ICGperiod >> 16) & 0xFF
-        config.txfull[8] = (config.ICGperiod >> 8) & 0xFF
-        config.txfull[9] = config.ICGperiod & 0xFF
+        config.txfull[2] = (config.sh_period >> 24) & 0xFF
+        config.txfull[3] = (config.sh_period >> 16) & 0xFF
+        config.txfull[4] = (config.sh_period >> 8) & 0xFF
+        config.txfull[5] = config.sh_period & 0xFF
+        config.txfull[6] = (config.icg_period >> 24) & 0xFF
+        config.txfull[7] = (config.icg_period >> 16) & 0xFF
+        config.txfull[8] = (config.icg_period >> 8) & 0xFF
+        config.txfull[9] = config.icg_period & 0xFF
         # averages to perfom
-        config.txfull[10] = config.AVGn[0]
-        config.txfull[11] = config.AVGn[1]
+        config.txfull[10] = config.avg_n[0]
+        config.txfull[11] = config.avg_n[1]
 
         # transmit everything at once (the USB-firmware does not work if all bytes are not transmittet in one go)
         ser.write(config.txfull)
@@ -211,8 +215,8 @@ def rxtxcontthread(panel, progress_var, config: Config):
                 # plot the new data
                 panel.bupdate.invoke()
                 # hold values for saving data to file
-                config.SHsent = config.SHperiod
-                config.ICGsent = config.ICGperiod
+                config.sh_sent = config.sh_period
+                config.icg_sent = config.icg_period
 
         # resend settings with continuous transmission disabled to avoid flooding of the serial port
         config.txfull[10] = 0
@@ -238,7 +242,7 @@ def progressthread(progress_var, config: Config):
     progress_var.set(0)
 
     # Calculate total time considering software averaging
-    requested_avg = config.AVGn[1]
+    requested_avg = config.avg_n[1]
     if requested_avg <= 15:
         # Hardware averaging only
         hardware_avg = requested_avg
@@ -249,7 +253,7 @@ def progressthread(progress_var, config: Config):
         software_iterations = int(np.ceil(requested_avg / 15.0))
 
     # Total time is: ICGperiod * hardware_avg * software_iterations
-    total_time = config.ICGperiod * hardware_avg * software_iterations / config.MCLK
+    total_time = config.icg_period * hardware_avg * software_iterations / config.mclk
 
     # Add overhead for serial communication and data processing per iteration
     # Estimate ~0.5 seconds per iteration for serial read and processing
@@ -265,7 +269,7 @@ def progressthread(progress_var, config: Config):
 def rxtxcancel(SerQueue, config: Config):
     config.stopsignal = 1
     # Are we stopping one very long measurement, or the continuous real-time view?
-    if config.AVGn[0] == 0:
+    if config.avg_n[0] == 0:
         ser = SerQueue.get()
         ser.cancel_read()
 

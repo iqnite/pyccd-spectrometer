@@ -32,6 +32,8 @@ from PIL import Image, ImageTk
 from io import BytesIO
 import csv
 import numpy as np
+from datetime import datetime
+from spectrometer.calibration import default_calibration
 
 from spectrometer import config, CCDpanelsetup, CCDplots
 from utils import plotgraph
@@ -70,8 +72,8 @@ def openfile(self, CCDplot: CCDplots.BuildPlot):
                         if any(c.isdigit() for c in tok)
                     ]
                     if len(nums) >= 2:
-                        CCDplot.config.SHsent = np.uint32(nums[0])
-                        CCDplot.config.ICGsent = np.uint32(nums[1])
+                        CCDplot.config.sh_sent = np.uint32(nums[0])
+                        CCDplot.config.icg_sent = np.uint32(nums[1])
                         break
         except Exception:
             pass
@@ -115,9 +117,6 @@ def savefile(self, config: config.Config):
         return
 
     try:
-        from datetime import datetime
-        from spectrometer.calibration import default_calibration
-
         with open(filename, mode="w") as csvfile:
             writeCSV = csv.writer(csvfile, delimiter=" ")
 
@@ -158,10 +157,12 @@ def savefile(self, config: config.Config):
             )
 
             # Timing configuration
-            sh_period = str(config.SHsent) if hasattr(config, "SHsent") else "200"
-            icg_period = str(config.ICGsent) if hasattr(config, "ICGsent") else "100000"
+            sh_period = str(config.sh_sent) if hasattr(config, "SHsent") else "200"
+            icg_period = (
+                str(config.icg_sent) if hasattr(config, "ICGsent") else "100000"
+            )
             int_time = (
-                str(float(config.SHsent) / 2) if hasattr(config, "SHsent") else "100.0"
+                str(float(config.sh_sent) / 2) if hasattr(config, "SHsent") else "100.0"
             )
 
             writeCSV.writerow(
@@ -181,11 +182,11 @@ def savefile(self, config: config.Config):
 
             # Add firmware settings (always save actual values, never N/A)
             avg_value = (
-                config.AVGn[0]
-                if hasattr(config, "AVGn") and len(config.AVGn) > 0
+                config.avg_n[0]
+                if hasattr(config, "AVGn") and len(config.avg_n) > 0
                 else 0
             )
-            mclk_value = config.MCLK if hasattr(config, "MCLK") else 2000000
+            mclk_value = config.mclk if hasattr(config, "MCLK") else 2000000
             writeCSV.writerow(
                 [
                     "#Firmware-settings:",
@@ -301,10 +302,12 @@ def savefile_with_regression(self, config: config.Config):
             )
 
             # Timing configuration
-            sh_period = str(config.SHsent) if hasattr(config, "SHsent") else "200"
-            icg_period = str(config.ICGsent) if hasattr(config, "ICGsent") else "100000"
+            sh_period = str(config.sh_sent) if hasattr(config, "SHsent") else "200"
+            icg_period = (
+                str(config.icg_sent) if hasattr(config, "ICGsent") else "100000"
+            )
             int_time = (
-                str(float(config.SHsent) / 2) if hasattr(config, "SHsent") else "100.0"
+                str(float(config.sh_sent) / 2) if hasattr(config, "SHsent") else "100.0"
             )
 
             writeCSV.writerow(
@@ -324,11 +327,11 @@ def savefile_with_regression(self, config: config.Config):
 
             # Add firmware settings (always save actual values, never N/A)
             avg_value = (
-                config.AVGn[0]
-                if hasattr(config, "AVGn") and len(config.AVGn) > 0
+                config.avg_n[0]
+                if hasattr(config, "AVGn") and len(config.avg_n) > 0
                 else 0
             )
-            mclk_value = config.MCLK if hasattr(config, "MCLK") else 2000000
+            mclk_value = config.mclk if hasattr(config, "MCLK") else 2000000
             writeCSV.writerow(
                 [
                     "#Firmware-settings:",

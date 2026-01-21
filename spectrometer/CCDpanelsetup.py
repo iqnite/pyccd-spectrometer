@@ -24,14 +24,16 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
+import sys
 import tkinter as tk
-from tkinter import ttk, colorchooser, messagebox
+from tkinter import ttk, colorchooser, messagebox, filedialog
 import numpy as np
 import serial
 import math
 import webbrowser
 import json
 import os
+from PIL import Image, ImageTk, ImageDraw, ImageFont
 
 from spectrometer import CCDserial, CCDfiles, CCDplots
 from spectrometer.calibration import default_calibration
@@ -111,9 +113,6 @@ class BuildPanel(ttk.Frame):
         """Add header, logo, and close button"""
         # Add AstroLens logo on the left
         try:
-            from PIL import Image, ImageTk
-            import os
-
             # Get the path to the PNG file
             logo_path = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)), "assets", "astrolens.png"
@@ -133,14 +132,12 @@ class BuildPanel(ttk.Frame):
                 logo_photo = ImageTk.PhotoImage(logo_image)
 
                 self.logo_label = ttk.Label(self, image=logo_photo)
-                self.logo_label.image = logo_photo  # Keep a reference
+                self.logo_label.image = logo_photo  # type: ignore Keep a reference
                 self.logo_label.grid(row=0, column=0, pady=10, padx=(5, 0), sticky="w")
         except Exception as e:
             print(f"Could not load logo: {e}")
 
         # Create circular close button with high resolution
-        from PIL import Image, ImageDraw, ImageFont
-
         button_size = 30
         scale = 4  # Render at 4x resolution for smooth edges
         high_res_size = button_size * scale
@@ -164,6 +161,9 @@ class BuildPanel(ttk.Frame):
                 font = None
 
         text = "X"
+        text_x = 0
+        text_y = 0
+        padding = 0
         if font:
             bbox = draw.textbbox((0, 0), text, font=font)
             text_width = bbox[2] - bbox[0]
@@ -254,8 +254,13 @@ class BuildPanel(ttk.Frame):
         # Bind hover and click events
         self.bclose.bind("<Enter>", self.on_close_hover)
         self.bclose.bind("<Leave>", self.on_close_leave)
-        self.bclose.bind("<Button-1>", lambda e, root=self.master: root.destroy())
+        self.bclose.bind("<Button-1>", lambda e: sys.exit())
         self.bclose.config(cursor="hand2")
+
+        # Configure grid columns to allow button placement
+        self.grid_columnconfigure(0, weight=0)  # Logo column
+        self.grid_columnconfigure(1, weight=1)  # Spacer column
+        self.grid_columnconfigure(2, weight=0)  # Close button column
 
         self.bclose.grid(row=0, column=2, pady=10, padx=(0, 10), sticky="e")
 
@@ -405,11 +410,11 @@ class BuildPanel(ttk.Frame):
 
     def update_firmware(self, *args):
         if self.firmware_type.get() == "STM32F103":
-            self.CCDplot.config.MCLK = 800000
+            self.CCDplot.config.mclk = 800000
             self.CCDplot.config.min_sh = 8
             self.CCDplot.config.max_sh = 65535
         else:
-            self.CCDplot.config.MCLK = 2000000
+            self.CCDplot.config.mclk = 2000000
             self.CCDplot.config.min_sh = 20
             self.CCDplot.config.max_sh = 4294967295
         # Update timings
@@ -461,8 +466,8 @@ class BuildPanel(ttk.Frame):
         self.ltint.grid(column=1, row=shicg_row + 4, pady=5, sticky="w")
 
         # Set initial values
-        self.SH.set(str(self.CCDplot.config.SHperiod))
-        self.ICG.set(str(self.CCDplot.config.ICGperiod))
+        self.SH.set(str(self.CCDplot.config.sh_period))
+        self.ICG.set(str(self.CCDplot.config.icg_period))
 
         # Traces for auto-calculation
         self.tint_value.trace_add("write", self.calculate_timings)
@@ -495,7 +500,7 @@ class BuildPanel(ttk.Frame):
         )
 
         # Set initial exposure time input based on config
-        tint_sec = float(self.CCDplot.config.SHperiod) / self.CCDplot.config.MCLK
+        tint_sec = float(self.CCDplot.config.sh_period) / self.CCDplot.config.mclk
         if tint_sec < 1e-3:
             self.tint_value.set(str(round(tint_sec * 1e6, 2)))
             self.tint_unit.set("us")
@@ -539,7 +544,7 @@ class BuildPanel(ttk.Frame):
                 raise ValueError("Invalid unit")
 
             # Calculate SH-period
-            sh_period = int(round(tint_sec * self.CCDplot.config.MCLK))
+            sh_period = int(round(tint_sec * self.CCDplot.config.mclk))
 
             # Enforce limits
             sh_period = max(
@@ -554,8 +559,8 @@ class BuildPanel(ttk.Frame):
             icg_period = n * sh_period
 
             # Update config and fields
-            self.CCDplot.config.SHperiod = np.uint32(sh_period)
-            self.CCDplot.config.ICGperiod = np.uint32(icg_period)
+            self.CCDplot.config.sh_period = np.uint32(sh_period)
+            self.CCDplot.config.icg_period = np.uint32(icg_period)
             self.SH.set(str(sh_period))
             self.ICG.set(str(icg_period))
 
@@ -579,20 +584,20 @@ class BuildPanel(ttk.Frame):
 
     def ICGSHcallback(self, name, index, mode, status, tint, colr, SH, ICG):
         try:
-            self.CCDplot.config.SHperiod = np.uint32(int(SH.get()))
-            self.CCDplot.config.ICGperiod = np.uint32(int(ICG.get()))
+            self.CCDplot.config.sh_period = np.uint32(int(SH.get()))
+            self.CCDplot.config.icg_period = np.uint32(int(ICG.get()))
         except:
             print("SH or ICG not an integer")
 
-        if self.CCDplot.config.SHperiod < 1:
-            self.CCDplot.config.SHperiod = np.uint32(1)
-        if self.CCDplot.config.ICGperiod < 1:
-            self.CCDplot.config.ICGperiod = np.uint32(1)
+        if self.CCDplot.config.sh_period < 1:
+            self.CCDplot.config.sh_period = np.uint32(1)
+        if self.CCDplot.config.icg_period < 1:
+            self.CCDplot.config.icg_period = np.uint32(1)
 
         if (
-            (self.CCDplot.config.ICGperiod % self.CCDplot.config.SHperiod)
-            or (self.CCDplot.config.SHperiod < self.CCDplot.config.min_sh)
-            or (self.CCDplot.config.ICGperiod < 14776)
+            (self.CCDplot.config.icg_period % self.CCDplot.config.sh_period)
+            or (self.CCDplot.config.sh_period < self.CCDplot.config.min_sh)
+            or (self.CCDplot.config.icg_period < 14776)
         ):
             status.set("CCD pulse timing violation!")
             colr.configure(fg="#ffc200")
@@ -600,7 +605,7 @@ class BuildPanel(ttk.Frame):
         else:
             status.set("CCD pulse timing correct.")
             colr.configure(fg="#ffffff")
-            tint_sec = float(self.CCDplot.config.SHperiod) / self.CCDplot.config.MCLK
+            tint_sec = float(self.CCDplot.config.sh_period) / self.CCDplot.config.mclk
             if tint_sec < 1e-3:
                 print_tint = str(round(tint_sec * 1e6, 2)) + " us"
             elif tint_sec < 1:
@@ -613,13 +618,13 @@ class BuildPanel(ttk.Frame):
         tint.set("Integration time is " + print_tint)
 
     def modeset(self, CONTvar):
-        self.CCDplot.config.AVGn[0] = CONTvar.get()
+        self.CCDplot.config.avg_n[0] = CONTvar.get()
 
     def AVGcallback(self, AVGscale):
-        self.CCDplot.config.AVGn[1] = np.uint8(self.AVGscale.get())
-        self.AVGlabel.config(text=str(self.CCDplot.config.AVGn[1]))
+        self.CCDplot.config.avg_n[1] = np.uint8(self.AVGscale.get())
+        self.AVGlabel.config(text=str(self.CCDplot.config.avg_n[1]))
 
-    def RAWcallback(self, name, index, mode, invert, CCDplot):
+    def RAWcallback(self, name, index, mode, invert, CCDplot: CCDplots.BuildPlot):
         self.CCDplot.config.datainvert = invert.get()
         if self.CCDplot.config.datainvert == 0:
             self.cbalance.config(state=tk.DISABLED)
@@ -936,7 +941,7 @@ class BuildPanel(ttk.Frame):
         )
         self.rcontinuous.grid(column=1, row=continuous_row + 1, sticky="w", padx=5)
         # set initial state
-        self.CONTvar.set(self.CCDplot.config.AVGn[0])
+        self.CONTvar.set(self.CCDplot.config.avg_n[0])
 
     def avgfields(self, avg_row):
         # average - variables, widgets and traces associated with the average slider
@@ -954,8 +959,8 @@ class BuildPanel(ttk.Frame):
         self.AVGscale.grid(column=1, row=avg_row, padx=5, pady=5, sticky="w")
         self.AVGlabel = ttk.Label(self)
         self.AVGlabel.grid(column=2, row=avg_row, padx=5, pady=5, sticky="w")
-        self.AVGscale.set(self.CCDplot.config.AVGn[1])
-        self.AVGlabel.config(text=str(self.CCDplot.config.AVGn[1]))
+        self.AVGscale.set(self.CCDplot.config.avg_n[1])
+        self.AVGlabel.config(text=str(self.CCDplot.config.avg_n[1]))
 
     def collectfields(self, collect_row, SerQueue, progress_var):
         # collect and stop buttons
@@ -975,7 +980,9 @@ class BuildPanel(ttk.Frame):
             self.buttonframe,
             text="Stop",
             width=15,
-            command=lambda SerQueue=SerQueue: CCDserial.rxtxcancel(SerQueue, self.CCDplot.config),
+            command=lambda SerQueue=SerQueue: CCDserial.rxtxcancel(
+                SerQueue, self.CCDplot.config
+            ),
             state=tk.DISABLED,
         )
         self.bstop.pack(side=tk.RIGHT, padx=5, pady=5, anchor="e")
@@ -1122,9 +1129,6 @@ class BuildPanel(ttk.Frame):
 
         # Now overlay the icon image on top of the buttons
         try:
-            from PIL import Image, ImageTk
-            import os
-
             # Prefer a small palette icon if present, fallback to astrolens
             base_dir = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)), "assets"
@@ -1150,7 +1154,7 @@ class BuildPanel(ttk.Frame):
                 try:
                     resample = Image.Resampling.LANCZOS
                 except Exception:
-                    resample = Image.LANCZOS
+                    resample = Image.LANCZOS  # type: ignore for backward compatibility
                 icon_image = icon_solid.resize(target_size, resample)
                 icon_photo = ImageTk.PhotoImage(icon_image)
 
@@ -1162,7 +1166,7 @@ class BuildPanel(ttk.Frame):
                     bd=0,
                     cursor="hand2",  # Show hand cursor to indicate it's clickable
                 )
-                self.icon_overlay.image = icon_photo
+                self.icon_overlay.image = icon_photo  # type: ignore keep a reference
                 self.icon_overlay.place(relx=0.5, rely=0.5, anchor="center")
 
                 # Make the overlay pass click events to the button underneath
@@ -1200,9 +1204,6 @@ class BuildPanel(ttk.Frame):
 
         # Add save icon overlay to the regression save button
         try:
-            from PIL import Image, ImageTk
-            import os
-
             # Clear PIL image cache to force reload
             Image.preinit()
             Image.init()
@@ -1237,7 +1238,7 @@ class BuildPanel(ttk.Frame):
                 try:
                     resample = Image.Resampling.LANCZOS
                 except Exception:
-                    resample = Image.LANCZOS
+                    resample = Image.LANCZOS  # type: ignore for backward compatibility
                 save_icon_resized = save_icon_solid.resize(target_size, resample)
                 self.reg_save_icon_black = ImageTk.PhotoImage(save_icon_resized)
 
@@ -1267,7 +1268,7 @@ class BuildPanel(ttk.Frame):
                 try:
                     resample = Image.Resampling.LANCZOS
                 except Exception:
-                    resample = Image.LANCZOS
+                    resample = Image.LANCZOS  # type: ignore for backward compatibility
                 save_icon_white_resized = save_icon_white_solid.resize(
                     target_size, resample
                 )
@@ -1354,6 +1355,10 @@ class BuildPanel(ttk.Frame):
             column=0, row=save_row + 6, padx=5, pady=(10, 5), columnspan=3, sticky="w"
         )
 
+        tolerance_frame.grid(
+            column=0, row=save_row + 6, padx=5, pady=(10, 5), columnspan=3, sticky="w"
+        )
+
         # Green tolerance (exact match)
         ttk.Label(tolerance_frame, text="Green:").grid(
             row=0, column=0, padx=(0, 2), sticky="e"
@@ -1369,6 +1374,10 @@ class BuildPanel(ttk.Frame):
             row=0, column=2, padx=(0, 8), sticky="w"
         )
 
+        ttk.Label(tolerance_frame, text="nm").grid(
+            row=0, column=2, padx=(0, 8), sticky="w"
+        )
+
         # Yellow tolerance (close match)
         ttk.Label(tolerance_frame, text="Yellow:").grid(
             row=0, column=3, padx=2, sticky="e"
@@ -1380,6 +1389,10 @@ class BuildPanel(ttk.Frame):
             tolerance_frame, textvariable=self.yellow_tolerance_var, width=6
         )
         yellow_entry.grid(row=0, column=4, padx=2)
+        ttk.Label(tolerance_frame, text="nm").grid(
+            row=0, column=5, padx=(0, 8), sticky="w"
+        )
+
         ttk.Label(tolerance_frame, text="nm").grid(
             row=0, column=5, padx=(0, 8), sticky="w"
         )
@@ -1445,9 +1458,6 @@ class BuildPanel(ttk.Frame):
 
         # Add icon overlay to the button
         try:
-            from PIL import Image, ImageTk
-            import os
-
             # Get the path to save.png
             base_dir = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)), "assets"
@@ -1471,7 +1481,7 @@ class BuildPanel(ttk.Frame):
                 try:
                     resample = Image.Resampling.LANCZOS
                 except Exception:
-                    resample = Image.LANCZOS
+                    resample = Image.LANCZOS  # type: ignore for backward compatibility
                 save_icon_resized = save_icon_solid.resize(target_size, resample)
                 icon_photo_com = ImageTk.PhotoImage(save_icon_resized)
 
@@ -1483,7 +1493,7 @@ class BuildPanel(ttk.Frame):
                     bd=0,
                     cursor="hand2",
                 )
-                self.icon_overlay_com.image = icon_photo_com
+                self.icon_overlay_com.image = icon_photo_com  # type: ignore keep a reference
                 self.icon_overlay_com.place(relx=0.5, rely=0.5, anchor="center")
                 self.icon_overlay_com.bind(
                     "<Button-1>", lambda e: self.save_com_settings()
@@ -1688,9 +1698,6 @@ class BuildPanel(ttk.Frame):
 
     def load_comparison_data(self):
         """Load a .dat file for comparison"""
-        from tkinter import filedialog
-        import os
-
         filename = filedialog.askopenfilename(
             title="Select comparison data file",
             filetypes=[("Data files", "*.dat"), ("All files", "*.*")],
@@ -1743,7 +1750,7 @@ class BuildPanel(ttk.Frame):
             # Show filename and remove button
             filename_label = ttk.Label(
                 self.compare_info_frame,
-                text=self.comparison_filename,
+                text=str(self.comparison_filename),
                 font=("Avenir", 9),
             )
             filename_label.pack(side=tk.LEFT, padx=5)
@@ -1801,7 +1808,7 @@ class BuildPanel(ttk.Frame):
                 messagebox.showinfo(
                     "Unavailable",
                     "Marking line colour is only adjustable in Regular mode.",
-                    parent=getattr(self, "color_window", None),
+                    parent=getattr(self, "color_window", self.master),
                 )
             except Exception:
                 pass
@@ -1934,7 +1941,7 @@ class BuildPanel(ttk.Frame):
         if img:
             try:
                 self.bsave_regression.config(image=img)
-                self.bsave_regression.image = img
+                self.bsave_regression.image = img  # type: ignore keep reference
             except Exception:
                 pass
 
@@ -2084,9 +2091,6 @@ class BuildPanel(ttk.Frame):
 
         # Add icon overlays to the buttons
         try:
-            from PIL import Image, ImageTk
-            import os
-
             base_dir = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)), "assets"
             )
@@ -2111,7 +2115,7 @@ class BuildPanel(ttk.Frame):
                 try:
                     resample = Image.Resampling.LANCZOS
                 except Exception:
-                    resample = Image.LANCZOS
+                    resample = Image.LANCZOS  # type: ignore for backward compatibility
                 icon_image = icon_solid.resize(target_size, resample)
                 icon_photo = ImageTk.PhotoImage(icon_image)
 
@@ -2123,7 +2127,7 @@ class BuildPanel(ttk.Frame):
                     bd=0,
                     cursor="hand2",
                 )
-                self.icon_overlay.image = icon_photo
+                self.icon_overlay.image = icon_photo  # type: ignore keep a reference
                 self.icon_overlay.place(relx=0.5, rely=0.5, anchor="center")
                 self.icon_overlay.bind("<Button-1>", lambda e: self.open_color_picker())
 
@@ -2157,7 +2161,7 @@ class BuildPanel(ttk.Frame):
                     bd=0,
                     cursor="hand2",
                 )
-                self.icon_overlay_zoom.image = icon_photo_zoom
+                self.icon_overlay_zoom.image = icon_photo_zoom  # type: ignore keep a reference
                 self.icon_overlay_zoom.place(relx=0.5, rely=0.5, anchor="center")
                 self.icon_overlay_zoom.bind("<Button-1>", lambda e: self.save_figure())
 
@@ -2191,7 +2195,7 @@ class BuildPanel(ttk.Frame):
                     bd=0,
                     cursor="hand2",
                 )
-                self.icon_overlay_save.image = icon_photo_save
+                self.icon_overlay_save.image = icon_photo_save  # type: ignore keep a reference
                 self.icon_overlay_save.place(relx=0.5, rely=0.5, anchor="center")
                 self.icon_overlay_save.bind("<Button-1>", lambda e: self.zoom_mode())
         except Exception as e:
