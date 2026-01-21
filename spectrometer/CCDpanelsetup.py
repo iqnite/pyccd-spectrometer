@@ -1359,10 +1359,6 @@ class BuildPanel(ttk.Frame):
             column=0, row=save_row + 6, padx=5, pady=(10, 5), columnspan=3, sticky="w"
         )
 
-        tolerance_frame.grid(
-            column=0, row=save_row + 6, padx=5, pady=(10, 5), columnspan=3, sticky="w"
-        )
-
         # Green tolerance (exact match)
         ttk.Label(tolerance_frame, text="Green:").grid(
             row=0, column=0, padx=(0, 2), sticky="e"
@@ -1374,9 +1370,6 @@ class BuildPanel(ttk.Frame):
             tolerance_frame, textvariable=self.green_tolerance_var, width=6
         )
         green_entry.grid(row=0, column=1, padx=2)
-        ttk.Label(tolerance_frame, text="nm").grid(
-            row=0, column=2, padx=(0, 8), sticky="w"
-        )
 
         ttk.Label(tolerance_frame, text="nm").grid(
             row=0, column=2, padx=(0, 8), sticky="w"
@@ -1393,10 +1386,6 @@ class BuildPanel(ttk.Frame):
             tolerance_frame, textvariable=self.yellow_tolerance_var, width=6
         )
         yellow_entry.grid(row=0, column=4, padx=2)
-        ttk.Label(tolerance_frame, text="nm").grid(
-            row=0, column=5, padx=(0, 8), sticky="w"
-        )
-
         ttk.Label(tolerance_frame, text="nm").grid(
             row=0, column=5, padx=(0, 8), sticky="w"
         )
@@ -1531,9 +1520,7 @@ class BuildPanel(ttk.Frame):
         self.color_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
 
         # Clean up reference when window is closed
-        self.color_window.protocol(
-            "WM_DELETE_WINDOW", lambda: self.close_color_window()
-        )
+        self.color_window.protocol("WM_DELETE_WINDOW", self.close_color_window)
 
         # Main plot color section
         ttk.Label(
@@ -1652,7 +1639,7 @@ class BuildPanel(ttk.Frame):
             self.color_window,
             text="Apply & Close",
             style="Accent.TButton",
-            command=lambda: self.close_color_window(),
+            command=self.close_color_window,
         ).pack(pady=15)
 
     def apply_tolerance_settings(self):
@@ -1858,7 +1845,7 @@ class BuildPanel(ttk.Frame):
             # Close the window after color selection
             self.close_color_window()
 
-    def close_color_window(self):
+    def close_color_window(self, *_, **__):
         """Close the color picker window and clean up reference"""
         if (
             hasattr(self, "color_window")
