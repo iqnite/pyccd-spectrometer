@@ -29,7 +29,7 @@ from tkinter import messagebox
 import serial
 import numpy as np
 
-from spectrometer import config
+from spectrometer.config import Config
 import threading
 import tkinter as ttk
 import time
@@ -42,21 +42,21 @@ import time
 # byte[7-10]: The 4 bytes constituting the 32-bit int holding the ICG-period
 # byte[11]: Continuous flag: 0 equals one acquisition, 1 equals continuous mode
 # byte[12]: The number of integrations to average
-def rxtx(panel, SerQueue, progress_var):
+def rxtx(panel, SerQueue, progress_var, config: Config):
     threadser = None
     if config.AVGn[0] == 0:
         threadser = threading.Thread(
-            target=rxtxoncethread, args=(panel, SerQueue, progress_var), daemon=True
+            target=rxtxoncethread, args=(panel, SerQueue, progress_var, config), daemon=True
         )
     elif config.AVGn[0] == 1:
         threadser = threading.Thread(
-            target=rxtxcontthread, args=(panel, progress_var), daemon=True
+            target=rxtxcontthread, args=(panel, progress_var, config), daemon=True
         )
     if threadser is not None:
         threadser.start()
 
 
-def rxtxoncethread(panel, SerQueue, progress_var):
+def rxtxoncethread(panel, SerQueue, progress_var, config: Config):
     # open serial port
     try:
         ser = serial.Serial(config.port, config.baudrate)
@@ -69,7 +69,7 @@ def rxtxoncethread(panel, SerQueue, progress_var):
         # start the progressbar
         panel.progress.config(mode="determinate")
         threadprogress = threading.Thread(
-            target=progressthread, args=(progress_var,), daemon=True
+            target=progressthread, args=(progress_var, config), daemon=True
         )
         threadprogress.start()
 
@@ -120,7 +120,7 @@ def rxtxoncethread(panel, SerQueue, progress_var):
             ser.write(config.txfull)
 
             # wait for the firmware to return data
-            config.rxData8 = ser.read(7388)
+            config.rxData8 = np.frombuffer(ser.read(7388), dtype=np.uint8)
 
             # combine received bytes into 16-bit data
             for rxi in range(3694):
@@ -134,7 +134,7 @@ def rxtxoncethread(panel, SerQueue, progress_var):
         ser.close()
 
         # enable all buttons
-        panelwakeup(panel)
+        panelwakeup(panel, config)
 
         if config.stopsignal == 0:
             # If we did software averaging, compute the average
@@ -157,7 +157,7 @@ def rxtxoncethread(panel, SerQueue, progress_var):
         )
 
 
-def rxtxcontthread(panel, progress_var):
+def rxtxcontthread(panel, progress_var, config: Config):
     # open serial port
     try:
         ser = serial.Serial(config.port, config.baudrate)
@@ -199,7 +199,7 @@ def rxtxcontthread(panel, progress_var):
         # loop to acquire and plot data continuously
         while config.stopsignal == 0:
             # wait for the firmware to return data
-            config.rxData8 = ser.read(7388)
+            config.rxData8 = np.frombuffer(ser.read(7388), dtype=np.uint8)
 
             if config.stopsignal == 0:
                 # combine received bytes into 16-bit data
@@ -224,7 +224,7 @@ def rxtxcontthread(panel, progress_var):
 
         # close serial port
         ser.close()
-        panelwakeup(panel)
+        panelwakeup(panel, config)
         panel.progress.stop()
 
     except serial.SerialException:
@@ -234,9 +234,9 @@ def rxtxcontthread(panel, progress_var):
         )
 
 
-def progressthread(progress_var):
+def progressthread(progress_var, config: Config):
     progress_var.set(0)
-    
+
     # Calculate total time considering software averaging
     requested_avg = config.AVGn[1]
     if requested_avg <= 15:
@@ -247,22 +247,22 @@ def progressthread(progress_var):
         # Software averaging with multiple collections
         hardware_avg = 15
         software_iterations = int(np.ceil(requested_avg / 15.0))
-    
+
     # Total time is: ICGperiod * hardware_avg * software_iterations
     total_time = config.ICGperiod * hardware_avg * software_iterations / config.MCLK
-    
+
     # Add overhead for serial communication and data processing per iteration
     # Estimate ~0.5 seconds per iteration for serial read and processing
     serial_overhead = software_iterations * 0.5
     total_time += serial_overhead
-    
+
     for i in range(1, 11):
         progress_var.set(i)
         # wait 1/10th of the total acquisition time before adding to progress bar
         time.sleep(total_time / 10)
 
 
-def rxtxcancel(SerQueue):
+def rxtxcancel(SerQueue, config: Config):
     config.stopsignal = 1
     # Are we stopping one very long measurement, or the continuous real-time view?
     if config.AVGn[0] == 0:
@@ -289,7 +289,7 @@ def panelsleep(panel):
         pass
 
 
-def panelwakeup(panel):
+def panelwakeup(panel, config: Config):
     panel.bstop.config(state=ttk.DISABLED)
     panel.bopen.config(state=ttk.NORMAL)
     panel.bsave.config(state=ttk.NORMAL)

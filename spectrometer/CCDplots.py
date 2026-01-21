@@ -15,8 +15,9 @@ from spectrometer.spectrum_gradient import update_spectrum_background
 
 
 class BuildPlot(ttk.Frame):
-    def __init__(self, master):
+    def __init__(self, master, config: config.Config):
         super().__init__(master)
+        self.config = config
 
         # Configure this frame to expand
         self.grid_rowconfigure(0, weight=1)
@@ -93,7 +94,7 @@ class BuildPlot(ttk.Frame):
         """Update spectrum background based on current settings"""
         try:
             # Get current settings
-            current_spectroscopy_mode = config.spectroscopy_mode
+            current_spectroscopy_mode = self.config.spectroscopy_mode
             current_show_colors = getattr(self, "show_colors", False)
 
             # Always call the update function to handle axis changes and settings
@@ -213,7 +214,7 @@ class BuildPlot(ttk.Frame):
         self.current_data = ccd_data
 
         # Choose x-axis based on mode
-        if config.spectroscopy_mode:
+        if self.config.spectroscopy_mode:
             x_values = calibration.default_calibration.apply(np.arange(len(ccd_data)))
             x_label = "Wavelength (nm)"
         else:
@@ -278,7 +279,7 @@ class BuildPlot(ttk.Frame):
 
         # Determine color and elements based on element matching (if enabled and in spectroscopy mode)
         element_matches = []
-        if config.spectroscopy_mode:
+        if self.config.spectroscopy_mode:
             if self.element_matching_enabled:
                 color, element_matches = self._get_marker_color_and_elements(x_pos)
             else:
@@ -293,7 +294,7 @@ class BuildPlot(ttk.Frame):
         )
 
         # Determine label based on spectroscopy mode (without units)
-        if config.spectroscopy_mode:
+        if self.config.spectroscopy_mode:
             label_text = f"{x_pos:.2f}"
         else:
             label_text = f"{int(x_pos)}"
@@ -469,7 +470,7 @@ class BuildPlot(ttk.Frame):
 
         Returns: (color, list of (element_name, match_percentage) sorted by percentage desc)
         """
-        if not self.emission_lines or not config.spectroscopy_mode:
+        if not self.emission_lines or not self.config.spectroscopy_mode:
             return ("red", [])
 
         # Find all emission lines and calculate match percentages
@@ -480,8 +481,8 @@ class BuildPlot(ttk.Frame):
 
             # Calculate match percentage based on distance
             # Use configurable thresholds from config
-            green_threshold = config.green_tolerance_nm
-            yellow_threshold = config.yellow_tolerance_nm
+            green_threshold = self.config.green_tolerance_nm
+            yellow_threshold = self.config.yellow_tolerance_nm
 
             if distance <= green_threshold:
                 # Within green tolerance: 90-100% match
@@ -546,7 +547,7 @@ class BuildPlot(ttk.Frame):
 
             # Calculate new color and elements
             element_text_obj = None
-            if config.spectroscopy_mode:
+            if self.config.spectroscopy_mode:
                 if enabled:
                     color, element_matches = self._get_marker_color_and_elements(x_pos)
 
@@ -633,7 +634,7 @@ class BuildPlot(ttk.Frame):
 
         try:
             # Check if we're in spectroscopy mode
-            if not config.spectroscopy_mode:
+            if not self.config.spectroscopy_mode:
                 messagebox.showinfo(
                     "Spectroscopy Mode Required",
                     "Please enable Spectroscopy Mode to export spectrum images.",

@@ -6,7 +6,7 @@ from typing import cast
 from PIL import Image, ImageTk
 
 import sv_ttk
-from spectrometer import CCDpanelsetup, CCDplots
+from spectrometer import CCDpanelsetup, CCDplots, config
 
 root = tk.Tk()
 root.title("pySPEC")
@@ -49,7 +49,7 @@ enter_fullscreen()
 SerQueue = queue.Queue()
 
 # Build menu, plot frame, and control panel
-CCDplot = CCDplots.BuildPlot(root)
+CCDplot = CCDplots.BuildPlot(root, config.Config())
 panel = CCDpanelsetup.BuildPanel(root, CCDplot, SerQueue)
 
 # Configure root window for expansion
