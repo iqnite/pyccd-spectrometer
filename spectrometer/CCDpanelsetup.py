@@ -254,7 +254,7 @@ class BuildPanel(ttk.Frame):
         # Bind hover and click events
         self.bclose.bind("<Enter>", self.on_close_hover)
         self.bclose.bind("<Leave>", self.on_close_leave)
-        self.bclose.bind("<Button-1>", lambda e: sys.exit())
+        self.bclose.bind("<Button-1>", lambda e: self.winfo_toplevel().destroy())
         self.bclose.config(cursor="hand2")
 
         # Configure grid columns to allow button placement
