@@ -6,7 +6,7 @@ from typing import cast
 from PIL import Image, ImageTk
 
 import sv_ttk
-from spectrometer import CCDpanelsetup, CCDplots, config
+from spectrometer import CCDpanelsetup, CCDplots, configuration
 
 root = tk.Tk()
 root.title("pySPEC")
@@ -48,7 +48,7 @@ enter_fullscreen()
 
 SerQueue = queue.Queue()
 
-CCDplot = CCDplots.BuildPlot(root, config.Config())
+CCDplot = CCDplots.BuildPlot(root, configuration.Config())
 panel_container = tk.Frame(root)
 canvas = tk.Canvas(panel_container, highlightthickness=0)
 scrollbar = tk.Scrollbar(panel_container, orient="vertical", command=canvas.yview)

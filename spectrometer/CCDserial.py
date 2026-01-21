@@ -29,7 +29,7 @@ from tkinter import messagebox
 import serial
 import numpy as np
 
-from spectrometer.config import Config
+from spectrometer.configuration import Config
 import threading
 import tkinter as ttk
 import time

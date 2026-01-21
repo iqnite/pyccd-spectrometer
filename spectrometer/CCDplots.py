@@ -10,12 +10,12 @@ matplotlib.use("TkAgg")
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.figure import Figure
-from spectrometer import config, calibration
+from spectrometer import calibration, configuration
 from spectrometer.spectrum_gradient import update_spectrum_background
 
 
 class BuildPlot(ttk.Frame):
-    def __init__(self, master, config: config.Config):
+    def __init__(self, master, config: configuration.Config):
         super().__init__(master)
         self.config = config
 

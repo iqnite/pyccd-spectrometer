@@ -35,7 +35,7 @@ import numpy as np
 from datetime import datetime
 from spectrometer.calibration import default_calibration
 
-from spectrometer import config, CCDpanelsetup, CCDplots
+from spectrometer import CCDpanelsetup, CCDplots, configuration
 from utils import plotgraph
 
 
@@ -109,7 +109,7 @@ def openfile(self, CCDplot: CCDplots.BuildPlot):
         messagebox.showerror("pySPEC", "There's a problem opening the file.")
 
 
-def savefile(self, config: config.Config):
+def savefile(self, config: configuration.Config):
     filename = filedialog.asksaveasfilename(
         defaultextension=".dat", title="Save file as", parent=self
     )
@@ -250,7 +250,7 @@ def savefile(self, config: config.Config):
         messagebox.showerror("pySPEC", f"Error saving file: {str(e)}")
 
 
-def savefile_with_regression(self, config: config.Config):
+def savefile_with_regression(self, config: configuration.Config):
     """Save file with regression parameters included in the header"""
     filename = filedialog.asksaveasfilename(
         defaultextension=".dat", title="Save file with regression as", parent=self
