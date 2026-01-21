@@ -2,6 +2,7 @@ import tkinter as tk
 import queue
 import os
 import sys
+from tkinter import ttk
 from typing import cast
 from PIL import Image, ImageTk
 
@@ -49,11 +50,15 @@ enter_fullscreen()
 SerQueue = queue.Queue()
 
 CCDplot = CCDplots.BuildPlot(root, configuration.Config())
-panel_container = tk.Frame(root)
+side_container = tk.Frame(root)
+side_container.grid(row=0, column=1, sticky="nsew")
+panel_container = tk.Frame(side_container)
 canvas = tk.Canvas(panel_container, highlightthickness=0)
-scrollbar = tk.Scrollbar(panel_container, orient="vertical", command=canvas.yview)
+scrollbar = ttk.Scrollbar(panel_container, orient="vertical", command=canvas.yview)
 scrollable_frame = tk.Frame(canvas)
 
+header = CCDpanelsetup.PanelHeader(side_container)
+header.pack(fill="x", side="top", expand=False)
 panel = CCDpanelsetup.BuildPanel(scrollable_frame, CCDplot, SerQueue)
 panel.pack(fill="both", expand=True)
 
@@ -71,7 +76,8 @@ canvas.configure(yscrollcommand=scrollbar.set)
 
 # Use grid instead of pack for better control over scrollbar placement
 panel_container.grid_rowconfigure(0, weight=1)
-panel_container.grid_columnconfigure(0, weight=1)
+panel_container.grid_columnconfigure(0, weight=1, minsize=400)
+panel_container.grid_columnconfigure(1, weight=0)
 canvas.grid(row=0, column=0, sticky="nsew")
 scrollbar.grid(row=0, column=1, sticky="ns")
 
@@ -86,12 +92,10 @@ for child in scrollable_frame.winfo_children():
 
 root.grid_rowconfigure(0, weight=1)
 root.grid_columnconfigure(0, weight=1)  # Plot column expands
-root.grid_columnconfigure(1, weight=0, minsize=470)
+root.grid_columnconfigure(1, weight=0)
 
 CCDplot.grid(row=0, column=0, sticky="nsew")
-panel_container.grid(
-    row=0, column=1, sticky="nsew", padx=(35, 0)
-)  # Changed to nsew to allow horizontal expansion
+panel_container.pack(fill="y", side="bottom", expand=True)
 
 
 def main():

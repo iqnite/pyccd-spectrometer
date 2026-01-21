@@ -43,71 +43,10 @@ from utils import plotgraph
 COM_SETTINGS_FILE = "com_settings.json"
 
 
-class BuildPanel(ttk.Frame):
-    def __init__(self, master, CCDplot: CCDplots.BuildPlot, SerQueue):
-        # geometry-rows for packing the grid
-        mode_row = 14
-        device_row = 24
-        shicg_row = 34
-        continuous_row = 44
-        avg_row = 54
-        collect_row = 64
-        plotmode_row = 74
-        save_row = 84
-        update_row = 94
-        progress_var = tk.IntVar()
-
+class PanelHeader(ttk.Frame):
+    def __init__(self, master):
         super().__init__(master)
-
-        # Store CCDplot reference for callbacks
-        self.CCDplot = CCDplot
-
-        # Initialize plot colors
-        self.main_plot_color = "#1f77b4"  # Default matplotlib blue
-        self.regression_color = "#d62728"  # Default red
-        self.compare_color = "#2ca02c"  # Default green for comparison data
-        self.emission_line_color = (
-            "red"  # Default red for emission lines (when not matched)
-        )
-        self.emission_color_button = None
-        self.emission_color_preview = None
-
-        # Initialize comparison data storage
-        self.comparison_data = None
-        self.comparison_filename = None
-
-        # Initialize baseline data storage
-        self.baseline_data = None
-        self.baseline_subtract_enabled = False
-
-        # Track whether we've auto-opened calibration during this run
-        self.calibration_prompted = False
-
-        # Create all widgets and space between them
         self.header_fields()
-        self.grid_rowconfigure(1, minsize=25)  # Add space after header
-        self.mode_fields(mode_row)
-        # insert vertical space
-        self.grid_rowconfigure(mode_row + 1, minsize=20)
-        self.devicefields(device_row)
-        # insert vertical space
-        self.grid_rowconfigure(device_row + 1, minsize=30)
-        self.CCDparamfields(shicg_row)
-        # insert vertical space
-        self.grid_rowconfigure(shicg_row + 4, minsize=30)
-        self.collectmodefields(continuous_row)
-        self.avgfields(avg_row)
-        # insert vertical space
-        self.grid_rowconfigure(avg_row + 2, minsize=30)
-        self.collectfields(collect_row, SerQueue, progress_var)
-        # vertical space
-        self.grid_rowconfigure(collect_row + 2, minsize=30)
-        self.plotmodefields(plotmode_row, CCDplot)
-        self.saveopenfields(save_row, CCDplot)
-        self.updateplotfields(update_row, CCDplot)
-        # vertical space
-        self.grid_rowconfigure(update_row + 2, minsize=20)
-        self.aboutbutton(update_row + 3)
 
     def header_fields(self):
         """Add header, logo, and close button"""
@@ -271,6 +210,71 @@ class BuildPanel(ttk.Frame):
     def on_close_leave(self, event):
         """Restore color when not hovering"""
         self.bclose.itemconfig(self.button_image_id, image=self.button_photo)
+
+
+class BuildPanel(ttk.Frame):
+    def __init__(self, master, CCDplot: CCDplots.BuildPlot, SerQueue):
+        # geometry-rows for packing the grid
+        mode_row = 14
+        device_row = 24
+        shicg_row = 34
+        continuous_row = 44
+        avg_row = 54
+        collect_row = 64
+        plotmode_row = 74
+        save_row = 84
+        update_row = 94
+        progress_var = tk.IntVar()
+
+        super().__init__(master)
+
+        # Store CCDplot reference for callbacks
+        self.CCDplot = CCDplot
+
+        # Initialize plot colors
+        self.main_plot_color = "#1f77b4"  # Default matplotlib blue
+        self.regression_color = "#d62728"  # Default red
+        self.compare_color = "#2ca02c"  # Default green for comparison data
+        self.emission_line_color = (
+            "red"  # Default red for emission lines (when not matched)
+        )
+        self.emission_color_button = None
+        self.emission_color_preview = None
+
+        # Initialize comparison data storage
+        self.comparison_data = None
+        self.comparison_filename = None
+
+        # Initialize baseline data storage
+        self.baseline_data = None
+        self.baseline_subtract_enabled = False
+
+        # Track whether we've auto-opened calibration during this run
+        self.calibration_prompted = False
+
+        # Create all widgets and space between them
+        self.mode_fields(mode_row)
+        # insert vertical space
+        self.grid_rowconfigure(mode_row + 1, minsize=20)
+        self.devicefields(device_row)
+        # insert vertical space
+        self.grid_rowconfigure(device_row + 1, minsize=30)
+        self.CCDparamfields(shicg_row)
+        # insert vertical space
+        self.grid_rowconfigure(shicg_row + 4, minsize=30)
+        self.collectmodefields(continuous_row)
+        self.avgfields(avg_row)
+        # insert vertical space
+        self.grid_rowconfigure(avg_row + 2, minsize=30)
+        self.collectfields(collect_row, SerQueue, progress_var)
+        # vertical space
+        self.grid_rowconfigure(collect_row + 2, minsize=30)
+        self.plotmodefields(plotmode_row, CCDplot)
+        self.saveopenfields(save_row, CCDplot)
+        self.updateplotfields(update_row, CCDplot)
+        # vertical space
+        self.grid_rowconfigure(update_row + 2, minsize=20)
+        self.aboutbutton(update_row + 3)
 
     def mode_fields(self, mode_row):
         """Add spectroscopy mode toggle"""
