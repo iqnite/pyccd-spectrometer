@@ -24,8 +24,6 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
-from email import header
-import sys
 import tkinter as tk
 from tkinter import ttk, colorchooser, messagebox, filedialog
 import numpy as np
@@ -34,7 +32,7 @@ import math
 import webbrowser
 import json
 import os
-from PIL import Image, ImageTk, ImageDraw, ImageFont
+from PIL import Image, ImageTk
 
 from spectrometer import CCDserial, CCDfiles, CCDplots
 from spectrometer.calibration import default_calibration
@@ -42,185 +40,6 @@ from utils import plotgraph
 
 # COM settings file
 COM_SETTINGS_FILE = "com_settings.json"
-
-
-class PanelHeader(ttk.Frame):
-    def __init__(self, master):
-        super().__init__(master)
-        self.header_fields()
-
-    def header_fields(self):
-        """Add header, logo, and close button"""
-        # Add AstroLens logo on the left
-        try:
-            # Get the path to the PNG file
-            logo_path = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), "assets", "astrolens.png"
-            )
-
-            if os.path.exists(logo_path):
-                logo_image = Image.open(logo_path)
-
-                # Calculate proper aspect ratio resize for header
-                target_height = 45  # Increased from 30 for larger logo
-                aspect_ratio = logo_image.width / logo_image.height
-                target_width = int(target_height * aspect_ratio)
-
-                logo_image = logo_image.resize(
-                    (target_width, target_height), Image.Resampling.LANCZOS
-                )
-                logo_photo = ImageTk.PhotoImage(logo_image)
-
-                self.logo_label = ttk.Label(self, image=logo_photo)
-                self.logo_label.image = logo_photo  # type: ignore Keep a reference
-                self.logo_label.grid(row=0, column=0, pady=10, padx=(5, 0), sticky="w")
-        except Exception as e:
-            print(f"Could not load logo: {e}")
-
-        # Create circular close button with high resolution
-        button_size = 30
-        scale = 4  # Render at 4x resolution for smooth edges
-        high_res_size = button_size * scale
-
-        # Create high-resolution image
-        self.button_img = Image.new(
-            "RGBA", (high_res_size, high_res_size), (0, 0, 0, 0)
-        )
-        draw = ImageDraw.Draw(self.button_img, "RGBA")
-
-        # Draw smooth circle
-        draw.ellipse([0, 0, high_res_size - 1, high_res_size - 1], fill="#ffc200")
-
-        # Draw X text - use simple X instead of unicode
-        try:
-            font = ImageFont.truetype("arial.ttf", int(16 * scale))
-        except:
-            try:
-                font = ImageFont.truetype("Arial.ttf", int(16 * scale))
-            except:
-                font = None
-
-        text = "X"
-        text_x = 0
-        text_y = 0
-        padding = 0
-        if font:
-            bbox = draw.textbbox((0, 0), text, font=font)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-            text_x = (high_res_size - text_width) // 2 - bbox[0]
-            text_y = (high_res_size - text_height) // 2 - bbox[1]
-            draw.text((text_x, text_y), text, fill="black", font=font)
-        else:
-            # Fallback: draw X as two lines
-            padding = high_res_size // 4
-            draw.line(
-                [
-                    (padding, padding),
-                    (high_res_size - padding, high_res_size - padding),
-                ],
-                fill="black",
-                width=scale * 2,
-            )
-            draw.line(
-                [
-                    (high_res_size - padding, padding),
-                    (padding, high_res_size - padding),
-                ],
-                fill="black",
-                width=scale * 2,
-            )
-
-        # Scale down for smooth anti-aliased result
-        self.button_img = self.button_img.resize(
-            (button_size, button_size), Image.Resampling.LANCZOS
-        )
-        self.button_photo = ImageTk.PhotoImage(self.button_img)
-
-        # Create hover version (darker)
-        self.button_img_hover = Image.new(
-            "RGBA", (high_res_size, high_res_size), (0, 0, 0, 0)
-        )
-        draw_hover = ImageDraw.Draw(self.button_img_hover, "RGBA")
-        draw_hover.ellipse([0, 0, high_res_size - 1, high_res_size - 1], fill="#e6ad00")
-
-        if font:
-            draw_hover.text((text_x, text_y), text, fill="black", font=font)
-        else:
-            draw_hover.line(
-                [
-                    (padding, padding),
-                    (high_res_size - padding, high_res_size - padding),
-                ],
-                fill="black",
-                width=scale * 2,
-            )
-            draw_hover.line(
-                [
-                    (high_res_size - padding, padding),
-                    (padding, high_res_size - padding),
-                ],
-                fill="black",
-                width=scale * 2,
-            )
-
-        self.button_img_hover = self.button_img_hover.resize(
-            (button_size, button_size), Image.Resampling.LANCZOS
-        )
-        self.button_photo_hover = ImageTk.PhotoImage(self.button_img_hover)
-
-        # Get background color
-        try:
-            style = ttk.Style()
-            bg_color = style.lookup("TFrame", "background")
-            if not bg_color:
-                bg_color = "#1c1c1c"
-        except:
-            bg_color = "#1c1c1c"
-
-        # Create canvas with the button image
-        self.bclose = tk.Canvas(
-            self,
-            width=button_size,
-            height=button_size,
-            highlightthickness=0,
-            bg=bg_color,
-        )
-
-        self.button_image_id = self.bclose.create_image(
-            button_size // 2, button_size // 2, image=self.button_photo
-        )
-
-        # Bind hover and click events
-        self.bclose.bind("<Enter>", self.on_close_hover)
-        self.bclose.bind("<Leave>", self.on_close_leave)
-        self.bclose.bind("<Button-1>", lambda e: self.winfo_toplevel().destroy())
-        self.bclose.config(cursor="hand2")
-
-        # Configure grid columns to allow button placement
-        self.grid_columnconfigure(0, weight=0)  # Logo column
-        self.grid_columnconfigure(1, weight=1)  # Spacer column
-        self.grid_columnconfigure(2, weight=0)  # Close button column
-
-        self.bclose.grid(row=0, column=2, pady=10, padx=(0, 10), sticky="e")
-
-    def on_close_hover(self, event):
-        """Change color on hover"""
-        self.bclose.itemconfig(self.button_image_id, image=self.button_photo_hover)
-
-    def on_close_leave(self, event):
-        """Restore color when not hovering"""
-        self.bclose.itemconfig(self.button_image_id, image=self.button_photo)
-
-    def enter_fullscreen(self, event=None):
-        self.winfo_toplevel().attributes("-fullscreen", True)
-        self.pack(fill="x", side="top", expand=False)
-        self.update()
-
-    def quit_fullscreen(self, event=None):
-        self.winfo_toplevel().attributes("-fullscreen", False)
-        self.pack_forget()
-        self.master.update()
 
 
 class BuildPanel(ttk.Frame):

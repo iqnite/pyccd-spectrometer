@@ -2,12 +2,12 @@ import tkinter as tk
 import queue
 import os
 import sys
-from tkinter import ttk
 from typing import cast
 from PIL import Image, ImageTk
 
+import spectrometer.sidebar
 import sv_ttk
-from spectrometer import CCDpanelsetup, CCDplots, configuration
+from spectrometer import CCDplots, configuration
 
 root = tk.Tk()
 root.title("AstroLens pySPEC")
@@ -36,100 +36,15 @@ sv_ttk.set_theme("dark")
 SerQueue = queue.Queue()
 
 CCDplot = CCDplots.BuildPlot(root, configuration.Config())
-side_container = tk.Frame(root)
-side_container.grid(row=0, column=2, sticky="nsew")
-panel_container = tk.Frame(side_container)
-canvas = tk.Canvas(panel_container, highlightthickness=0)
-scrollbar = ttk.Scrollbar(panel_container, orient="vertical", command=canvas.yview)
-scrollable_frame = tk.Frame(canvas)
-
-# Create a separator for resizing
-separator = tk.Frame(root, bg="#555", width=4, cursor="sb_h_double_arrow")
-separator.grid(row=0, column=1, sticky="ns")
-
-header = CCDpanelsetup.PanelHeader(side_container)
-panel = CCDpanelsetup.BuildPanel(scrollable_frame, CCDplot, SerQueue)
-panel.pack(fill="both", expand=True)
-
-sidebar_expand_treshold = 10
-sidebar_collapse_treshold = 390
-sidebar_visible = True
-
-
-def update_scroll_region(event=None):
-    canvas.configure(scrollregion=canvas.bbox("all"))
-    # Update canvas window width to match the scrollable_frame's required width
-    canvas.itemconfig(canvas_window, width=scrollable_frame.winfo_reqwidth())
-
-
-scrollable_frame.bind("<Configure>", update_scroll_region)
-
-canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-canvas.configure(yscrollcommand=scrollbar.set)
-
-# Use grid instead of pack for better control over scrollbar placement
-panel_container.grid_rowconfigure(0, weight=1)
-panel_container.grid_columnconfigure(0, weight=1, minsize=400)
-panel_container.grid_columnconfigure(1, weight=0)
-canvas.grid(row=0, column=0, sticky="nsew")
-scrollbar.grid(row=0, column=1, sticky="ns")
-
-
-def _on_mousewheel(event):
-    canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-
-canvas.bind("<MouseWheel>", _on_mousewheel)
-for child in scrollable_frame.winfo_children():
-    child.bind("<MouseWheel>", _on_mousewheel)
-
-root.grid_rowconfigure(0, weight=1)
-root.grid_columnconfigure(0, weight=1)  # Plot column expands
-root.grid_columnconfigure(1, weight=0)  # Separator column
-root.grid_columnconfigure(2, weight=0)  # Sidebar column
-
-# Drag functionality for resizing
-drag_data = {"x": 0, "dragging": False}
-
-
-def on_separator_press(event):
-    drag_data["x"] = event.x_root
-    drag_data["dragging"] = True
-    separator.config(bg="#888")
-
-
-def on_separator_release(event):
-    global sidebar_visible
-    drag_data["dragging"] = False
-    separator.config(bg="#555")
-
-    # Calculate the change in x position
-    delta_x = event.x_root - drag_data["x"]
-    drag_data["x"] = event.x_root
-    # Get current sidebar width
-    current_width = side_container.winfo_width()
-    new_width = current_width - delta_x
-    # Update sidebar width
-    if new_width < sidebar_collapse_treshold:
-        if sidebar_visible:
-            sidebar_visible = False
-            side_container.grid_remove()
-    elif new_width > sidebar_expand_treshold:
-        if not sidebar_visible:
-            sidebar_visible = True
-            side_container.grid()
-
-
-separator.bind("<ButtonPress-1>", on_separator_press)
-separator.bind("<ButtonRelease-1>", on_separator_release)
-
 CCDplot.grid(row=0, column=0, sticky="nsew")
-panel_container.pack(fill="y", side="bottom", expand=True)
+side_bar = spectrometer.sidebar.SideBar(root, CCDplot, SerQueue)
+side_bar.grid(row=0, column=2, sticky="nsew")
+side_bar.panel_container.pack(fill="y", side="bottom", expand=True)
 
-root.bind("<F11>", header.enter_fullscreen)
-root.bind("<Escape>", header.quit_fullscreen)
+root.bind("<F11>", side_bar.header.enter_fullscreen)
+root.bind("<Escape>", side_bar.header.quit_fullscreen)
 
-header.enter_fullscreen()
+side_bar.header.enter_fullscreen()
 
 
 def main():
