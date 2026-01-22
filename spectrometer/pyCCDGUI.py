@@ -10,7 +10,7 @@ import sv_ttk
 from spectrometer import CCDpanelsetup, CCDplots, configuration
 
 root = tk.Tk()
-root.title("pySPEC")
+root.title("AstroLens pySPEC")
 
 
 def resource_path(relative_path: str) -> str:
