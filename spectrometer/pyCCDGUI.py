@@ -33,20 +33,6 @@ root.iconphoto(True, cast(tk.PhotoImage, icon_tk))
 root.state("zoomed")
 sv_ttk.set_theme("dark")
 
-
-def enter_fullscreen(event=None):
-    root.attributes("-fullscreen", True)
-
-
-def quit_fullscreen(event=None):
-    root.attributes("-fullscreen", False)
-
-
-root.bind("<F11>", enter_fullscreen)
-root.bind("<Escape>", quit_fullscreen)
-
-enter_fullscreen()
-
 SerQueue = queue.Queue()
 
 CCDplot = CCDplots.BuildPlot(root, configuration.Config())
@@ -96,6 +82,11 @@ root.grid_columnconfigure(1, weight=0)
 
 CCDplot.grid(row=0, column=0, sticky="nsew")
 panel_container.pack(fill="y", side="bottom", expand=True)
+
+root.bind("<F11>", header.enter_fullscreen)
+root.bind("<Escape>", header.quit_fullscreen)
+
+header.enter_fullscreen()
 
 
 def main():

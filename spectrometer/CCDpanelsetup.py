@@ -211,6 +211,12 @@ class PanelHeader(ttk.Frame):
         """Restore color when not hovering"""
         self.bclose.itemconfig(self.button_image_id, image=self.button_photo)
 
+    def enter_fullscreen(self, event=None):
+        self.winfo_toplevel().attributes("-fullscreen", True)
+
+    def quit_fullscreen(self, event=None):
+        self.winfo_toplevel().attributes("-fullscreen", False)
+
 
 class BuildPanel(ttk.Frame):
     def __init__(self, master, CCDplot: CCDplots.BuildPlot, SerQueue):
