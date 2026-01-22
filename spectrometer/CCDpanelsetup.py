@@ -24,6 +24,7 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
+from email import header
 import sys
 import tkinter as tk
 from tkinter import ttk, colorchooser, messagebox, filedialog
@@ -213,9 +214,13 @@ class PanelHeader(ttk.Frame):
 
     def enter_fullscreen(self, event=None):
         self.winfo_toplevel().attributes("-fullscreen", True)
+        self.pack(fill="x", side="top", expand=False)
+        self.update()
 
     def quit_fullscreen(self, event=None):
         self.winfo_toplevel().attributes("-fullscreen", False)
+        self.pack_forget()
+        self.master.update()
 
 
 class BuildPanel(ttk.Frame):

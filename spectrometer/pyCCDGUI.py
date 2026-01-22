@@ -44,7 +44,6 @@ scrollbar = ttk.Scrollbar(panel_container, orient="vertical", command=canvas.yvi
 scrollable_frame = tk.Frame(canvas)
 
 header = CCDpanelsetup.PanelHeader(side_container)
-header.pack(fill="x", side="top", expand=False)
 panel = CCDpanelsetup.BuildPanel(scrollable_frame, CCDplot, SerQueue)
 panel.pack(fill="both", expand=True)
 
