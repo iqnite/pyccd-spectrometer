@@ -5,11 +5,12 @@ import sys
 from typing import cast
 from PIL import Image, ImageTk
 
+import spectrometer.sidebar
 import sv_ttk
-from spectrometer import CCDpanelsetup, CCDplots
+from spectrometer import CCDplots, configuration
 
 root = tk.Tk()
-root.title("pySPEC")
+root.title("AstroLens pySPEC")
 
 
 def resource_path(relative_path: str) -> str:
@@ -32,34 +33,18 @@ root.iconphoto(True, cast(tk.PhotoImage, icon_tk))
 root.state("zoomed")
 sv_ttk.set_theme("dark")
 
-
-def enter_fullscreen(event=None):
-    root.attributes("-fullscreen", True)
-
-
-def quit_fullscreen(event=None):
-    root.attributes("-fullscreen", False)
-
-
-root.bind("<F11>", enter_fullscreen)
-root.bind("<Escape>", quit_fullscreen)
-
-enter_fullscreen()
-
 SerQueue = queue.Queue()
 
-# Build menu, plot frame, and control panel
-CCDplot = CCDplots.BuildPlot(root)
-panel = CCDpanelsetup.BuildPanel(root, CCDplot, SerQueue)
-
-# Configure root window for expansion
-root.grid_rowconfigure(0, weight=1)
-root.grid_columnconfigure(0, weight=1)  # Plot column expands
-root.grid_columnconfigure(1, weight=0)  # Panel column fixed
-
-# Place widgets with proper expansion
+CCDplot = CCDplots.BuildPlot(root, configuration.Config())
 CCDplot.grid(row=0, column=0, sticky="nsew")
-panel.grid(row=0, column=1, sticky="ns", padx=(35, 0))
+side_bar = spectrometer.sidebar.SideBar(root, CCDplot, SerQueue)
+side_bar.grid(row=0, column=2, sticky="nsew")
+side_bar.panel_container.pack(fill="y", side="bottom", expand=True)
+
+root.bind("<F11>", side_bar.header.enter_fullscreen)
+root.bind("<Escape>", side_bar.header.quit_fullscreen)
+
+side_bar.header.enter_fullscreen()
 
 
 def main():

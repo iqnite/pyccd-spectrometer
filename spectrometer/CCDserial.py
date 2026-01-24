@@ -29,7 +29,7 @@ from tkinter import messagebox
 import serial
 import numpy as np
 
-from spectrometer import config
+from spectrometer.configuration import Config
 import threading
 import tkinter as ttk
 import time
@@ -42,21 +42,23 @@ import time
 # byte[7-10]: The 4 bytes constituting the 32-bit int holding the ICG-period
 # byte[11]: Continuous flag: 0 equals one acquisition, 1 equals continuous mode
 # byte[12]: The number of integrations to average
-def rxtx(panel, SerQueue, progress_var):
+def rxtx(panel, SerQueue, progress_var, config: Config):
     threadser = None
-    if config.AVGn[0] == 0:
+    if config.avg_n[0] == 0:
         threadser = threading.Thread(
-            target=rxtxoncethread, args=(panel, SerQueue, progress_var), daemon=True
+            target=rxtxoncethread,
+            args=(panel, SerQueue, progress_var, config),
+            daemon=True,
         )
-    elif config.AVGn[0] == 1:
+    elif config.avg_n[0] == 1:
         threadser = threading.Thread(
-            target=rxtxcontthread, args=(panel, progress_var), daemon=True
+            target=rxtxcontthread, args=(panel, progress_var, config), daemon=True
         )
     if threadser is not None:
         threadser.start()
 
 
-def rxtxoncethread(panel, SerQueue, progress_var):
+def rxtxoncethread(panel, SerQueue, progress_var, config: Config):
     # open serial port
     try:
         ser = serial.Serial(config.port, config.baudrate)
@@ -69,7 +71,7 @@ def rxtxoncethread(panel, SerQueue, progress_var):
         # start the progressbar
         panel.progress.config(mode="determinate")
         threadprogress = threading.Thread(
-            target=progressthread, args=(progress_var,), daemon=True
+            target=progressthread, args=(progress_var, config), daemon=True
         )
         threadprogress.start()
 
@@ -81,7 +83,7 @@ def rxtxoncethread(panel, SerQueue, progress_var):
 
         # Determine hardware vs software averaging
         # Firmware supports max 15 averages, so for >15 we need software averaging
-        requested_avg = config.AVGn[1]
+        requested_avg = config.avg_n[1]
         if requested_avg <= 15:
             # Use hardware averaging only
             hardware_avg = requested_avg
@@ -99,16 +101,16 @@ def rxtxoncethread(panel, SerQueue, progress_var):
         config.txfull[0] = 69
         config.txfull[1] = 82
         # split 32-bit integers to be sent into 8-bit data
-        config.txfull[2] = (config.SHperiod >> 24) & 0xFF
-        config.txfull[3] = (config.SHperiod >> 16) & 0xFF
-        config.txfull[4] = (config.SHperiod >> 8) & 0xFF
-        config.txfull[5] = config.SHperiod & 0xFF
-        config.txfull[6] = (config.ICGperiod >> 24) & 0xFF
-        config.txfull[7] = (config.ICGperiod >> 16) & 0xFF
-        config.txfull[8] = (config.ICGperiod >> 8) & 0xFF
-        config.txfull[9] = config.ICGperiod & 0xFF
+        config.txfull[2] = (config.sh_period >> 24) & 0xFF
+        config.txfull[3] = (config.sh_period >> 16) & 0xFF
+        config.txfull[4] = (config.sh_period >> 8) & 0xFF
+        config.txfull[5] = config.sh_period & 0xFF
+        config.txfull[6] = (config.icg_period >> 24) & 0xFF
+        config.txfull[7] = (config.icg_period >> 16) & 0xFF
+        config.txfull[8] = (config.icg_period >> 8) & 0xFF
+        config.txfull[9] = config.icg_period & 0xFF
         # averages to perfom (send hardware average count)
-        config.txfull[10] = config.AVGn[0]
+        config.txfull[10] = config.avg_n[0]
         config.txfull[11] = hardware_avg
 
         # Perform software averaging by collecting multiple times
@@ -120,7 +122,7 @@ def rxtxoncethread(panel, SerQueue, progress_var):
             ser.write(config.txfull)
 
             # wait for the firmware to return data
-            config.rxData8 = ser.read(7388)
+            config.rxData8 = np.frombuffer(ser.read(7388), dtype=np.uint8)
 
             # combine received bytes into 16-bit data
             for rxi in range(3694):
@@ -134,19 +136,21 @@ def rxtxoncethread(panel, SerQueue, progress_var):
         ser.close()
 
         # enable all buttons
-        panelwakeup(panel)
+        panelwakeup(panel, config)
 
         if config.stopsignal == 0:
             # If we did software averaging, compute the average
             if software_iterations > 1:
                 for rxi in range(3694):
-                    config.rxData16[rxi] = np.uint16(np.round(accumulated_data[rxi] / software_iterations))
+                    config.rxData16[rxi] = np.uint16(
+                        np.round(accumulated_data[rxi] / software_iterations)
+                    )
 
             # plot the new data
             panel.bupdate.invoke()
             # hold values for saving data to file as the SHperiod and ICGperiod may be updated after acquisition
-            config.SHsent = config.SHperiod
-            config.ICGsent = config.ICGperiod
+            config.sh_sent = config.sh_period
+            config.icg_sent = config.icg_period
 
         SerQueue.queue.clear()
 
@@ -157,7 +161,7 @@ def rxtxoncethread(panel, SerQueue, progress_var):
         )
 
 
-def rxtxcontthread(panel, progress_var):
+def rxtxcontthread(panel, progress_var, config: Config):
     # open serial port
     try:
         ser = serial.Serial(config.port, config.baudrate)
@@ -181,17 +185,17 @@ def rxtxcontthread(panel, progress_var):
         config.txfull[0] = 69
         config.txfull[1] = 82
         # split 32-bit integers to be sent into 8-bit data
-        config.txfull[2] = (config.SHperiod >> 24) & 0xFF
-        config.txfull[3] = (config.SHperiod >> 16) & 0xFF
-        config.txfull[4] = (config.SHperiod >> 8) & 0xFF
-        config.txfull[5] = config.SHperiod & 0xFF
-        config.txfull[6] = (config.ICGperiod >> 24) & 0xFF
-        config.txfull[7] = (config.ICGperiod >> 16) & 0xFF
-        config.txfull[8] = (config.ICGperiod >> 8) & 0xFF
-        config.txfull[9] = config.ICGperiod & 0xFF
+        config.txfull[2] = (config.sh_period >> 24) & 0xFF
+        config.txfull[3] = (config.sh_period >> 16) & 0xFF
+        config.txfull[4] = (config.sh_period >> 8) & 0xFF
+        config.txfull[5] = config.sh_period & 0xFF
+        config.txfull[6] = (config.icg_period >> 24) & 0xFF
+        config.txfull[7] = (config.icg_period >> 16) & 0xFF
+        config.txfull[8] = (config.icg_period >> 8) & 0xFF
+        config.txfull[9] = config.icg_period & 0xFF
         # averages to perfom
-        config.txfull[10] = config.AVGn[0]
-        config.txfull[11] = config.AVGn[1]
+        config.txfull[10] = config.avg_n[0]
+        config.txfull[11] = config.avg_n[1]
 
         # transmit everything at once (the USB-firmware does not work if all bytes are not transmittet in one go)
         ser.write(config.txfull)
@@ -199,7 +203,7 @@ def rxtxcontthread(panel, progress_var):
         # loop to acquire and plot data continuously
         while config.stopsignal == 0:
             # wait for the firmware to return data
-            config.rxData8 = ser.read(7388)
+            config.rxData8 = np.frombuffer(ser.read(7388), dtype=np.uint8)
 
             if config.stopsignal == 0:
                 # combine received bytes into 16-bit data
@@ -211,8 +215,8 @@ def rxtxcontthread(panel, progress_var):
                 # plot the new data
                 panel.bupdate.invoke()
                 # hold values for saving data to file
-                config.SHsent = config.SHperiod
-                config.ICGsent = config.ICGperiod
+                config.sh_sent = config.sh_period
+                config.icg_sent = config.icg_period
 
         # resend settings with continuous transmission disabled to avoid flooding of the serial port
         config.txfull[10] = 0
@@ -224,7 +228,7 @@ def rxtxcontthread(panel, progress_var):
 
         # close serial port
         ser.close()
-        panelwakeup(panel)
+        panelwakeup(panel, config)
         panel.progress.stop()
 
     except serial.SerialException:
@@ -234,11 +238,11 @@ def rxtxcontthread(panel, progress_var):
         )
 
 
-def progressthread(progress_var):
+def progressthread(progress_var, config: Config):
     progress_var.set(0)
-    
+
     # Calculate total time considering software averaging
-    requested_avg = config.AVGn[1]
+    requested_avg = config.avg_n[1]
     if requested_avg <= 15:
         # Hardware averaging only
         hardware_avg = requested_avg
@@ -247,25 +251,25 @@ def progressthread(progress_var):
         # Software averaging with multiple collections
         hardware_avg = 15
         software_iterations = int(np.ceil(requested_avg / 15.0))
-    
+
     # Total time is: ICGperiod * hardware_avg * software_iterations
-    total_time = config.ICGperiod * hardware_avg * software_iterations / config.MCLK
-    
+    total_time = config.icg_period * hardware_avg * software_iterations / config.mclk
+
     # Add overhead for serial communication and data processing per iteration
     # Estimate ~0.5 seconds per iteration for serial read and processing
     serial_overhead = software_iterations * 0.5
     total_time += serial_overhead
-    
+
     for i in range(1, 11):
         progress_var.set(i)
         # wait 1/10th of the total acquisition time before adding to progress bar
         time.sleep(total_time / 10)
 
 
-def rxtxcancel(SerQueue):
+def rxtxcancel(SerQueue, config: Config):
     config.stopsignal = 1
     # Are we stopping one very long measurement, or the continuous real-time view?
-    if config.AVGn[0] == 0:
+    if config.avg_n[0] == 0:
         ser = SerQueue.get()
         ser.cancel_read()
 
@@ -289,7 +293,7 @@ def panelsleep(panel):
         pass
 
 
-def panelwakeup(panel):
+def panelwakeup(panel, config: Config):
     panel.bstop.config(state=ttk.DISABLED)
     panel.bopen.config(state=ttk.NORMAL)
     panel.bsave.config(state=ttk.NORMAL)
