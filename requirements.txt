@@ -1,6 +1,0 @@
-matplotlib
-numpy
-pillow
-pyserial
-reportlab
-scipy
