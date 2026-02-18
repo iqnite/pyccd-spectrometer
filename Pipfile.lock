@@ -1,12 +1,10 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "9e2d532cf945e9457d381802627587f90499ac17dbc8ae37259a395d49c6c4a2"
+            "sha256": "db1886f593e8b050eed486ccf3c3af2ace5c46531b33aa07545c746d1009648d"
         },
         "pipfile-spec": 6,
-        "requires": {
-            "python_version": "3.13"
-        },
+        "requires": {},
         "sources": [
             {
                 "name": "pypi",
@@ -786,11 +784,11 @@
         },
         "pyinstaller-hooks-contrib": {
             "hashes": [
-                "sha256:0120893de491a000845470ca9c0b39284731ac6bace26f6849dea9627aaed48e",
-                "sha256:0590db8edeba3e6c30c8474937021f5cd39c0602b4d10f74a064c73911efaca5"
+                "sha256:66ad4888ba67de6f3cfd7ef554f9dd1a4389e2eb19f84d7129a5a6818e3f2180",
+                "sha256:a5f0891a1e81e92406ab917d9e76adfd7a2b68415ee2e35c950a7b3910bc361b"
             ],
             "markers": "python_version >= '3.8'",
-            "version": "==2026.0"
+            "version": "==2026.1"
         },
         "pywin32-ctypes": {
             "hashes": [
