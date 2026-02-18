@@ -1,0 +1,6 @@
+matplotlib
+numpy
+pillow
+pyserial
+scipy
+reportlab
