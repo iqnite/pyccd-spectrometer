@@ -80,9 +80,6 @@ class BuildPanel(ttk.Frame):
         self.baseline_data = None
         self.baseline_subtract_enabled = False
 
-        # Track whether we've auto-opened calibration during this run
-        self.calibration_prompted = False
-
         # Create all widgets and space between them
         self.mode_fields(mode_row)
         # insert vertical space
@@ -133,16 +130,29 @@ class BuildPanel(ttk.Frame):
         )
         self.r_spectroscopy.grid(row=mode_row + 1, column=1, padx=5, sticky="w")
 
+    def _contrast_fg(self, bg):
+        """Return a readable foreground color ('#000000' or '#ffffff') for a background color.
+
+        Accepts hex color like '#rrggbb' or color names. Falls back to black on error.
+        """
+        try:
+            if not bg:
+                return "#000000"
+            if isinstance(bg, str) and bg.startswith("#") and len(bg) == 7:
+                r = int(bg[1:3], 16)
+                g = int(bg[3:5], 16)
+                b = int(bg[5:7], 16)
+                # Perceived luminance
+                lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+                return "#ffffff" if lum < 128 else "#000000"
+            # Unknown format - try to assume dark background for system default
+            return "#ffffff" if "dark" in str(bg).lower() else "#000000"
+        except Exception:
+            return "#000000"
+
     def mode_changed(self):
         """Handle mode switching"""
         self.CCDplot.config.spectroscopy_mode = bool(self.mode_var.get())
-
-        if self.CCDplot.config.spectroscopy_mode and not self.calibration_prompted:
-            # Auto-open calibration window only on first switch this session
-            self.calibration_prompted = True
-            default_calibration.open_calibration_window(
-                self.master, on_apply_callback=self.CCDplot.replot_current_spectrum
-            )
 
         # Update the plot immediately with the correct axis
         self.update_plot_axis()
@@ -156,6 +166,7 @@ class BuildPanel(ttk.Frame):
 
         # Update spectrum colors when mode changes
         self.CCDplot.set_show_colors(self.show_colors.get())
+        self.update_intensity_correction_controls()
         self.CCDplot.canvas.draw()
 
     def update_plot_axis(self):
@@ -457,12 +468,16 @@ class BuildPanel(ttk.Frame):
 
     def AVGcallback(self, AVGscale):
         try:
-            value = int(round(float(self.AVGscale.get())))
+            v = int(round(float(AVGscale)))
         except Exception:
-            value = 1
-        value = max(1, min(255, value))
-        self.avg_var.set(value)
-        self.CCDplot.config.avg_n[1] = np.uint8(value)
+            v = int(self.AVG_var.get())
+        v = max(1, min(255, v))
+        self.CCDplot.config.avg_n[1] = np.uint8(v)
+        # keep variable in sync
+        try:
+            self.AVG_var.set(v)
+        except Exception:
+            pass
 
     def RAWcallback(self, name, index, mode, invert, CCDplot: CCDplots.BuildPlot):
         self.CCDplot.config.datainvert = invert.get()
@@ -586,6 +601,8 @@ class BuildPanel(ttk.Frame):
                 except Exception as e:
                     print(f"Baseline subtraction error: {e}")
 
+            data = CCDplot.apply_intensity_correction(x_values, data)
+
             # Plot raw/intensity data directly
             lines = CCDplot.a.plot(x_values, data, alpha=alpha, color=self.main_plot_color)
             if lines:
@@ -628,6 +645,8 @@ class BuildPanel(ttk.Frame):
                         data = data.astype(float) - self.baseline_data.astype(float)
                 except Exception as e:
                     print(f"Baseline subtraction error: {e}")
+
+            data = CCDplot.apply_intensity_correction(x_values, data)
 
             # Plot raw data directly
             lines = CCDplot.a.plot(x_values, data, alpha=alpha, color=self.main_plot_color)
@@ -757,6 +776,8 @@ class BuildPanel(ttk.Frame):
                     if compare_x.max() < 4000:  # Likely pixel numbers
                         compare_x = default_calibration.apply(compare_x.astype(int))
 
+                compare_y = CCDplot.apply_intensity_correction(compare_x, compare_y)
+
                 CCDplot.a.plot(
                     compare_x, compare_y, color=self.compare_color, lw=1.0, alpha=0.8
                 )
@@ -768,6 +789,14 @@ class BuildPanel(ttk.Frame):
     def toggle_spectrum_colors(self):
         """Toggle the spectrum color background"""
         self.CCDplot.set_show_colors(self.show_colors.get())
+
+    def toggle_intensity_correction(self):
+        """Toggle wavelength-dependent intensity correction and refresh the plot."""
+        self.CCDplot.set_intensity_correction(self.intensity_correction_var.get())
+        try:
+            self.updateplot(self.CCDplot)
+        except Exception:
+            pass
 
     def run_detect_peaks(self, CCDplot: CCDplots.BuildPlot):
         """Read UI options and invoke the plot-layer peak detector."""
@@ -874,70 +903,6 @@ class BuildPanel(ttk.Frame):
         v = round(v)
         self.tolerance_var.set(v)
 
-    def _make_numeric_entry(self, parent, variable, width):
-        """Create a flat numeric entry that matches the dark theme."""
-        try:
-            bg = parent.cget("background")
-        except Exception:
-            try:
-                bg = self.master.cget("bg")
-            except Exception:
-                bg = None
-
-        entry_kwargs = dict(
-            textvariable=variable,
-            width=width,
-            fg="#ffffff",
-            insertbackground="#ffffff",
-        )
-        if bg is not None:
-            entry_kwargs["bg"] = bg
-
-        return tk.Entry(
-            parent,
-            bd=0,
-            relief="flat",
-            highlightthickness=0,
-            **entry_kwargs,
-        )
-
-    def _avg_entry_commit(self, event=None):
-        """Validate and commit a typed average count."""
-        try:
-            value = int(float(self.avg_var.get()))
-        except Exception:
-            value = 1
-        value = max(1, min(255, value))
-        self.avg_var.set(value)
-        self.CCDplot.config.avg_n[1] = np.uint8(value)
-
-    def _ph_entry_commit(self, event=None):
-        """Validate and commit a typed regression strength."""
-        try:
-            value = float(self.ph_var.get())
-        except Exception:
-            value = 10.0
-        value = max(10.0, min(1000.0, value))
-        self.ph_var.set(value)
-        if getattr(self, "ph_checkbox_var", None) and self.ph_checkbox_var.get() == 1:
-            try:
-                self.updateplot(self.CCDplot)
-            except Exception:
-                pass
-
-    def _opacity_entry_commit(self, event=None):
-        """Validate and commit a typed opacity value."""
-        try:
-            value = float(self.opacity_var.get())
-        except Exception:
-            value = 100.0
-        value = max(0.0, min(100.0, value))
-        self.opacity_var.set(value)
-        try:
-            self.updateplot(self.CCDplot)
-        except Exception:
-            pass
-
     
 
     def avgfields(self, avg_row):
@@ -945,24 +910,50 @@ class BuildPanel(ttk.Frame):
         # widgets
         self.lavg = ttk.Label(self, text="Averages:")
         self.lavg.grid(column=0, row=avg_row, sticky="e")
-        self.avg_frame = ttk.Frame(self)
-        self.avg_frame.grid(column=1, row=avg_row, padx=5, pady=5, sticky="w")
-        self.avg_var = tk.IntVar(value=int(self.CCDplot.config.avg_n[1]))
+        # Use an IntVar bound to the scale so we can provide inline editing
+        self.AVG_var = tk.IntVar(value=int(self.CCDplot.config.avg_n[1]))
         self.AVGscale = ttk.Scale(
-            self.avg_frame,
+            self,
             from_=1,
             to=255,
             orient=tk.HORIZONTAL,
             length=200,
-            variable=self.avg_var,
+            variable=self.AVG_var,
             command=self.AVGcallback,
         )
-        self.AVGscale.pack(side=tk.LEFT)
-        self.AVGlabel = self._make_numeric_entry(self.avg_frame, self.avg_var, 4)
-        self.AVGlabel.pack(side=tk.LEFT, padx=(1, 0))
-        self.AVGlabel.bind("<Return>", self._avg_entry_commit)
-        self.AVGlabel.bind("<FocusOut>", self._avg_entry_commit)
-        self.AVGscale.set(int(self.CCDplot.config.avg_n[1]))
+        self.AVGscale.grid(column=1, row=avg_row, padx=5, pady=5, sticky="w")
+
+        # Inline editable flat entry for the numeric value
+        try:
+            bg = self.cget("background")
+        except Exception:
+            bg = None
+        entry_kwargs = dict(textvariable=self.AVG_var, width=6)
+        if bg is not None:
+            entry_kwargs.update(dict(bg=bg))
+
+        # Inline numeric entry with explicit fg/bg for visibility across themes
+        try:
+            bg = self.cget("background")
+        except Exception:
+            try:
+                bg = self.master.cget("bg")
+            except Exception:
+                bg = "#ffffff"
+        fg = self._contrast_fg(bg)
+        self.AVG_entry = tk.Entry(self, textvariable=self.AVG_var, width=6, bd=0, relief="flat", highlightthickness=0, bg=bg, fg=fg)
+        self.AVG_entry.grid(column=2, row=avg_row, padx=5, pady=5, sticky="w")
+        try:
+            self.AVG_entry.lift()
+        except Exception:
+            pass
+        self.AVG_entry.bind("<Return>", lambda e: self._avg_entry_commit())
+        self.AVG_entry.bind("<FocusOut>", lambda e: self._avg_entry_commit())
+        # Ensure scale shows initial value
+        try:
+            self.AVGscale.set(self.AVG_var.get())
+        except Exception:
+            pass
 
     def collectfields(self, collect_row, SerQueue, progress_var):
         # collect and stop buttons
@@ -1025,11 +1016,9 @@ class BuildPanel(ttk.Frame):
         self.invert = tk.IntVar()
         self.balanced = tk.IntVar()
         self.show_colors = tk.IntVar()
-        # plot mode - variables, widgets and traces associated with the plot mode
-        # variables
-        self.invert = tk.IntVar()
-        self.balanced = tk.IntVar()
-        self.show_colors = tk.IntVar()
+        self.intensity_correction_var = tk.IntVar(
+            value=int(getattr(CCDplot, "intensity_correction_enabled", False))
+        )
 
         # widgets
         self.lplot = ttk.Label(self, text="Plot mode:")
@@ -1070,6 +1059,17 @@ class BuildPanel(ttk.Frame):
         )
         # moved down one row because mirror checkbox was inserted
         self.cshowcolors.grid(column=1, row=plotmode_row + 3, sticky="w", padx=5)
+        self.cintensity_correction = ttk.Checkbutton(
+            self,
+            text="Correct wavelength response",
+            variable=self.intensity_correction_var,
+            onvalue=1,
+            offvalue=0,
+            command=self.toggle_intensity_correction,
+        )
+        self.cintensity_correction.grid(
+            column=1, row=plotmode_row + 4, sticky="w", padx=5
+        )
         self.invert.trace_add(
             "write",
             lambda name, index, mode, invert=self.invert, CCDplot=CCDplot: self.RAWcallback(
@@ -1095,6 +1095,8 @@ class BuildPanel(ttk.Frame):
         self.balanced.set(self.CCDplot.config.balanced)
         self.mirror.set(self.CCDplot.config.datamirror)
         self.show_colors.set(0)
+        self.CCDplot.set_intensity_correction(self.intensity_correction_var.get())
+        self.update_intensity_correction_controls()
 
     def saveopenfields(self, save_row, CCDplot):
         # setup save/open buttons
@@ -1203,45 +1205,18 @@ class BuildPanel(ttk.Frame):
             ),
         )
         self.bsave_regression.grid(column=1, row=save_row + 2, sticky="e", padx=(0, 5))
-
-        # Restore regression save icons so the button mirrors the other icon buttons
         try:
-            base_dir = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), "assets"
-            )
-            black_path = os.path.join(base_dir, "save.png")
-            white_path = os.path.join(base_dir, "save_white.png")
-            target_size = (16, 16)
-            try:
-                resample = Image.Resampling.LANCZOS
-            except Exception:
-                resample = Image.LANCZOS  # type: ignore for backward compatibility
-
-            if os.path.exists(black_path):
-                black_image = Image.open(black_path).convert("RGBA")
-                self.reg_save_icon_black = ImageTk.PhotoImage(
-                    black_image.resize(target_size, resample)
-                )
-            else:
-                self.reg_save_icon_black = None
-
-            if os.path.exists(white_path):
-                white_image = Image.open(white_path).convert("RGBA")
-                self.reg_save_icon_white = ImageTk.PhotoImage(
-                    white_image.resize(target_size, resample)
-                )
-            else:
-                self.reg_save_icon_white = self.reg_save_icon_black
+            self.bsave_regression.lift()
         except Exception:
-            self.reg_save_icon_black = None
-            self.reg_save_icon_white = None
+            pass
 
-        self._set_reg_save_enabled(False)
+        # Add save icon overlay to the regression save button
+        # (optional overlay removed — not critical)
 
         # Peak detection controls (compact, placed near save/open)
         try:
             # Use a plain frame (no labelled border) to avoid the gray box
-            self.peak_frame = ttk.Frame(self, padding=4)
+            self.peak_frame = ttk.Frame(self, padding=6)
             # Place peak controls below the other save/open controls to avoid overlap
             self.peak_frame.grid(column=0, row=save_row + 8, columnspan=2, pady=(8, 6), sticky="w", padx=5)
 
@@ -1270,7 +1245,7 @@ class BuildPanel(ttk.Frame):
             ).grid(row=0, column=1, padx=(2, 6), sticky="w")
 
             # Single tolerance slider replaces prominence + smoothing for simplicity
-            ttk.Label(self.peak_frame, text="Tolerance", width=10).grid(
+            ttk.Label(self.peak_frame, text="Tolerance", width=12).grid(
                 row=1, column=0, sticky="e", padx=(2, 4), pady=(6, 0)
             )
             self.tolerance_scale = ttk.Scale(
@@ -1278,7 +1253,7 @@ class BuildPanel(ttk.Frame):
                 from_=0,
                 to=100,
                 orient=tk.HORIZONTAL,
-                length=140,
+                length=180,
                 variable=self.tolerance_var,
                 command=lambda v: self.tolerance_var.set(float(v)),
             )
@@ -1294,30 +1269,34 @@ class BuildPanel(ttk.Frame):
                 except Exception:
                     bg = None
 
-            entry_kwargs = dict(textvariable=self.tolerance_var, width=4)
+            entry_kwargs = dict(textvariable=self.tolerance_var, width=5)
             if bg is not None:
                 entry_kwargs.update(dict(bg=bg))
-            entry_kwargs.update(dict(fg="#ffffff", insertbackground="#ffffff"))
 
             self._tol_entry = tk.Entry(self.peak_frame, bd=0, relief="flat", highlightthickness=0, **entry_kwargs)
-            self._tol_entry.grid(row=1, column=2, sticky="w", padx=(0, 0), pady=(6, 0))
+            self._tol_entry.grid(row=1, column=2, sticky="w", padx=(0, 2), pady=(6, 0))
+            try:
+                self._tol_entry.lift()
+                self._tol_entry.configure(fg="black")
+            except Exception:
+                pass
             # Commit on Enter or focus out
             self._tol_entry.bind("<Return>", lambda e: self._tol_entry_commit())
             self._tol_entry.bind("<FocusOut>", lambda e: self._tol_entry_commit())
 
             ttk.Button(
                 self.peak_frame,
-                text="Detect",
+                text="Detect peaks",
                 style="Accent.TButton",
-                width=9,
+                width=12,
                 command=lambda CCDplot=CCDplot: self.run_detect_peaks(CCDplot),
             ).grid(row=3, column=0, padx=(5, 2), pady=(8, 0))
 
             ttk.Button(
                 self.peak_frame,
-                text="Clear markers",
+                text="Clear auto markers",
                 style="Accent.TButton",
-                width=11,
+                width=16,
                 command=lambda CCDplot=CCDplot: CCDplot.clear_auto_markers(stop_running=True),
             ).grid(row=3, column=1, columnspan=2, padx=(2, 5), pady=(8, 0))
         except Exception:
@@ -1335,11 +1314,10 @@ class BuildPanel(ttk.Frame):
         # Placeholder slider similar to Averages
         self.lphslider = ttk.Label(self, text="Strength", width=12)
         self.lphslider.grid(column=0, row=save_row + 3, sticky="e", padx=(0, 0))
-        self.ph_frame = ttk.Frame(self)
-        self.ph_frame.grid(column=1, row=save_row + 3, padx=(0, 0), pady=5, sticky="w")
-        self.ph_var = tk.DoubleVar(value=10.0)
+        # Regression strength slider with editable numeric field
+        self.ph_var = tk.DoubleVar(value=100.0)
         self.ph_scale = ttk.Scale(
-            self.ph_frame,
+            self,
             from_=10,
             to=1000,
             orient=tk.HORIZONTAL,
@@ -1347,16 +1325,37 @@ class BuildPanel(ttk.Frame):
             variable=self.ph_var,
             command=self._phslider_callback,
         )
-        self.ph_scale.pack(side=tk.LEFT)
+        self.ph_scale.grid(column=1, row=save_row + 3, padx=(0, 5), pady=5, sticky="w")
         # Update plot only when mouse is released to avoid lag during dragging
         self.ph_scale.bind(
             "<ButtonRelease-1>",
             lambda e, CCDplot=CCDplot: self._on_regression_release(CCDplot),
         )
-        self.ph_label = self._make_numeric_entry(self.ph_frame, self.ph_var, 4)
-        self.ph_label.pack(side=tk.LEFT, padx=(1, 0))
-        self.ph_label.bind("<Return>", self._ph_entry_commit)
-        self.ph_label.bind("<FocusOut>", self._ph_entry_commit)
+        # Inline editable entry for the raw slider value (10..1000)
+        try:
+            bg = self.cget("background")
+        except Exception:
+            bg = None
+        entry_kwargs = dict(textvariable=self.ph_var, width=8)
+        if bg is not None:
+            entry_kwargs.update(dict(bg=bg))
+
+        try:
+            bg = self.cget("background")
+        except Exception:
+            try:
+                bg = self.master.cget("bg")
+            except Exception:
+                bg = "#ffffff"
+        fg = self._contrast_fg(bg)
+        self.ph_entry = tk.Entry(self, textvariable=self.ph_var, width=8, bd=0, relief="flat", highlightthickness=0, bg=bg, fg=fg)
+        self.ph_entry.grid(column=2, row=save_row + 3, padx=0, pady=5, sticky="w")
+        try:
+            self.ph_entry.lift()
+        except Exception:
+            pass
+        self.ph_entry.bind("<Return>", lambda e: self._ph_entry_commit())
+        self.ph_entry.bind("<FocusOut>", lambda e: self._ph_entry_commit())
 
         # Set initial enabled/disabled state based on the checkbox
         self._ph_check_changed()
@@ -1364,11 +1363,10 @@ class BuildPanel(ttk.Frame):
         # Opacity slider for the main plot line (0..100 -> 0.0..1.0)
         self.lopacity = ttk.Label(self, text="Raw opacity", width=12)
         self.lopacity.grid(column=0, row=save_row + 4, sticky="e", padx=(0, 0))
-        self.opacity_frame = ttk.Frame(self)
-        self.opacity_frame.grid(column=1, row=save_row + 4, padx=(0, 0), pady=5, sticky="w")
+        # Opacity slider with inline editable percent field
         self.opacity_var = tk.DoubleVar(value=100.0)
         self.opacity_scale = ttk.Scale(
-            self.opacity_frame,
+            self,
             from_=0,
             to=100,
             orient=tk.HORIZONTAL,
@@ -1376,11 +1374,32 @@ class BuildPanel(ttk.Frame):
             variable=self.opacity_var,
             command=self._opacity_callback,
         )
-        self.opacity_scale.pack(side=tk.LEFT)
-        self.opacity_label = self._make_numeric_entry(self.opacity_frame, self.opacity_var, 4)
-        self.opacity_label.pack(side=tk.LEFT, padx=(1, 0))
-        self.opacity_label.bind("<Return>", self._opacity_entry_commit)
-        self.opacity_label.bind("<FocusOut>", self._opacity_entry_commit)
+        self.opacity_scale.grid(
+            column=1, row=save_row + 4, padx=(0, 5), pady=5, sticky="w"
+        )
+        try:
+            bg = self.cget("background")
+        except Exception:
+            bg = None
+        entry_kwargs = dict(textvariable=self.opacity_var, width=6)
+        if bg is not None:
+            entry_kwargs.update(dict(bg=bg))
+        try:
+            bg = self.cget("background")
+        except Exception:
+            try:
+                bg = self.master.cget("bg")
+            except Exception:
+                bg = "#ffffff"
+        fg = self._contrast_fg(bg)
+        self.opacity_entry = tk.Entry(self, textvariable=self.opacity_var, width=6, bd=0, relief="flat", highlightthickness=0, bg=bg, fg=fg)
+        self.opacity_entry.grid(column=2, row=save_row + 4, padx=5, pady=5, sticky="w")
+        try:
+            self.opacity_entry.lift()
+        except Exception:
+            pass
+        self.opacity_entry.bind("<Return>", lambda e: self._opacity_entry_commit())
+        self.opacity_entry.bind("<FocusOut>", lambda e: self._opacity_entry_commit())
         self.opacity_scale.set(100)
 
         # Element matching checkbox
@@ -1736,6 +1755,25 @@ class BuildPanel(ttk.Frame):
                 except Exception:
                     pass
 
+    def update_intensity_correction_controls(self):
+        """Enable the correction checkbox only in spectroscopy mode."""
+        checkbox = getattr(self, "cintensity_correction", None)
+        if not checkbox:
+            return
+
+        try:
+            if self.CCDplot.config.spectroscopy_mode:
+                checkbox.state(["!disabled"])
+            else:
+                checkbox.state(["disabled"])
+        except Exception:
+            try:
+                checkbox.configure(
+                    state=(tk.NORMAL if self.CCDplot.config.spectroscopy_mode else tk.DISABLED)
+                )
+            except Exception:
+                pass
+
     def load_comparison_data(self):
         """Load a .dat file for comparison"""
         filename = filedialog.askopenfilename(
@@ -1929,13 +1967,14 @@ class BuildPanel(ttk.Frame):
         # self.bupdate.grid(row=update_row, columnspan=3, sticky="EW", padx=5)
 
     def _phslider_callback(self, val):
-        """Internal callback for the regression slider to keep the value in range."""
+        """Internal callback for the regression slider to update the label."""
         try:
             v = float(val)
         except Exception:
-            v = 10.0
+            v = float(self.ph_var.get()) if hasattr(self, "ph_var") else 100.0
+        # Keep the variable updated (entry bound will reflect value)
         try:
-            self.ph_var.set(max(10.0, min(1000.0, v)))
+            self.ph_var.set(v)
         except Exception:
             pass
 
@@ -1946,6 +1985,45 @@ class BuildPanel(ttk.Frame):
                 self.updateplot(CCDplot)
             except Exception:
                 pass
+
+    def _avg_entry_commit(self, event=None):
+        try:
+            v = int(round(float(self.AVG_var.get())))
+        except Exception:
+            v = int(self.CCDplot.config.avg_n[1])
+        v = max(1, min(255, v))
+        try:
+            self.AVG_var.set(v)
+            self.AVGscale.set(v)
+            self.CCDplot.config.avg_n[1] = np.uint8(v)
+        except Exception:
+            pass
+
+    def _ph_entry_commit(self, event=None):
+        try:
+            v = float(self.ph_var.get())
+        except Exception:
+            v = 100.0
+        v = max(10.0, min(1000.0, v))
+        try:
+            self.ph_var.set(v)
+            self.ph_scale.set(v)
+        except Exception:
+            pass
+
+    def _opacity_entry_commit(self, event=None):
+        try:
+            v = float(self.opacity_var.get())
+        except Exception:
+            v = 100.0
+        v = max(0.0, min(100.0, v))
+        try:
+            self.opacity_var.set(v)
+            self.opacity_scale.set(v)
+            # update plot immediately
+            self._opacity_callback(v)
+        except Exception:
+            pass
 
     def _set_reg_save_enabled(self, enabled: bool):
         """Set regression save button state and icon consistently."""
@@ -1996,9 +2074,9 @@ class BuildPanel(ttk.Frame):
                     self.ph_scale.configure(state=tk.NORMAL)
                 except Exception:
                     pass
-            # bright label
+            # enable entry
             try:
-                self.ph_label.config(fg="#ffffff")
+                self.ph_entry.configure(state=tk.NORMAL)
             except Exception:
                 pass
 
@@ -2016,9 +2094,9 @@ class BuildPanel(ttk.Frame):
                     self.ph_scale.configure(state=tk.DISABLED)
                 except Exception:
                     pass
-            # dim label
+            # disable entry
             try:
-                self.ph_label.config(fg="#888888")
+                self.ph_entry.configure(state=tk.DISABLED)
             except Exception:
                 pass
 
@@ -2029,16 +2107,12 @@ class BuildPanel(ttk.Frame):
                 pass
 
     def _opacity_callback(self, val):
-        """Callback for the opacity slider: keep the value in range and redraw plot."""
+        """Callback for the opacity slider: update label and redraw plot."""
         try:
             v = float(val)
         except Exception:
             v = 100.0
-        try:
-            self.opacity_var.set(max(0.0, min(100.0, v)))
-        except Exception:
-            pass
-
+        alpha = max(0.0, min(1.0, v / 100.0))
         # Redraw the plot to apply new opacity
         try:
             self.updateplot(self.CCDplot)
