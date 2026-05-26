@@ -1,5 +1,6 @@
 import matplotlib
 import numpy as np
+import threading
 import tkinter as tk
 from tkinter import ttk
 import json
@@ -12,6 +13,14 @@ from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.figure import Figure
 from spectrometer import calibration, configuration
 from spectrometer.spectrum_gradient import update_spectrum_background
+
+# Optional imports for peak detection
+try:
+    from scipy.signal import find_peaks
+    from scipy.ndimage import gaussian_filter1d
+except Exception:
+    find_peaks = None
+    gaussian_filter1d = None
 
 
 class BuildPlot(ttk.Frame):
@@ -46,6 +55,9 @@ class BuildPlot(ttk.Frame):
         # Don't grid the toolbar_container at all - keeps it hidden
 
         self.current_data = None  # store last spectrum
+        self.current_spectrum_line = None  # Line2D for the main plotted spectrum
+        # Cancellation event for long-running detection processes
+        self._detect_cancel = threading.Event()
 
         # Variables for panning
         self.pan_start = None
@@ -55,11 +67,11 @@ class BuildPlot(ttk.Frame):
         # Store references for spectrum background updates
         self.spectroscopy_mode = config.spectroscopy_mode
         self.show_colors = False
+        self.intensity_correction_enabled = False
 
-        # Storage for user-placed markers
-        self.markers = (
-            []
-        )  # List of (line, label_text, x_pos, element_text_obj, label_text_obj) tuples
+        # Storage for user-placed markers (and separately auto-detected markers)
+        self.markers = []  # List of (line, label_text, x_pos, element_text_obj, label_text_obj) tuples
+        self.auto_markers = []  # List of Line2D objects created by auto detection
         self.element_matching_enabled = False
         self.emission_line_color = (
             "red"  # Default color for emission lines when not matched
@@ -221,6 +233,13 @@ class BuildPlot(ttk.Frame):
             x_values = np.arange(len(ccd_data))
             x_label = "Pixel Number"
 
+        y_values = self.apply_intensity_correction(x_values, ccd_data)
+        y_label = (
+            "Corrected intensity"
+            if self.intensity_correction_enabled and self.config.spectroscopy_mode
+            else "Intensity"
+        )
+
         # Clear markers when plotting new spectrum
         self.clear_markers()
 
@@ -233,9 +252,16 @@ class BuildPlot(ttk.Frame):
         self.ax_top.set_xlabel("")
         self.ax_top.set_xticks([])
 
-        self.a.plot(x_values, ccd_data, color="blue")
+        # Plot and keep a reference to the main spectrum Line2D so detectors can access it
+        lines = self.a.plot(x_values, y_values, color="blue")
+        if lines:
+            self.current_spectrum_line = lines[0]
+            try:
+                self.current_spectrum_line.set_label("spectrum")
+            except Exception:
+                pass
         self.a.set_xlabel(x_label)
-        self.a.set_ylabel("Intensity")
+        self.a.set_ylabel(y_label)
         self.a.grid(True)
 
         # Store original limits for reset functionality
@@ -257,6 +283,25 @@ class BuildPlot(ttk.Frame):
         self.show_colors = show_colors
         self.update_spectrum_background()
         self.canvas.draw_idle()
+
+    def set_intensity_correction(self, enabled):
+        """Enable or disable wavelength-dependent intensity correction."""
+        self.intensity_correction_enabled = bool(enabled)
+        self.canvas.draw_idle()
+
+    def _sensor_response(self, wavelength):
+        response = np.exp(-((np.abs(wavelength - 550.0) / 295.6) ** 2.37))
+        return np.clip(response, 1e-6, None)
+
+    def apply_intensity_correction(self, x_values, intensities):
+        """Correct intensities for the sensor response curve when enabled."""
+        data = np.asarray(intensities, dtype=float)
+        if not (self.config.spectroscopy_mode and self.intensity_correction_enabled):
+            return data
+
+        wavelengths = np.asarray(x_values, dtype=float)
+        correction = self._sensor_response(wavelengths)
+        return data / correction
 
     def add_marker(self, x_pos):
         """Add a vertical marker line at the specified x position"""
@@ -359,6 +404,9 @@ class BuildPlot(ttk.Frame):
         self.f.canvas.draw()
         self.f.canvas.flush_events()
 
+        # Return the created vertical line so callers (e.g., auto-detector) can track it
+        return line
+
     def remove_marker(self, x_pos):
         """Remove the marker closest to the specified x position"""
         if x_pos is None or not self.markers:
@@ -436,6 +484,160 @@ class BuildPlot(ttk.Frame):
 
         self.canvas.draw()
         self.canvas.flush_events()
+
+    def clear_auto_markers(self, stop_running: bool = False):
+        """Remove only auto-detected markers, leaving manual markers intact.
+
+        If `stop_running` is True, also set the detection cancellation flag
+        so any in-progress detection cooperatively stops. Internal callers
+        (like the detector itself) should call with stop_running=False to
+        avoid cancelling their own work.
+        """
+        # Optionally signal any running detection to stop (user requested)
+        if stop_running:
+            try:
+                self._detect_cancel.set()
+            except Exception:
+                pass
+
+        if not self.auto_markers:
+            return
+
+        for auto_line in list(self.auto_markers):
+            # Find corresponding entry in markers and remove it
+            for marker in list(self.markers):
+                if marker[0] is auto_line:
+                    line, label_text, x_pos, element_text, label_text_annotation = marker
+                    try:
+                        line.remove()
+                    except Exception:
+                        pass
+                    if element_text:
+                        try:
+                            element_text.remove()
+                        except Exception:
+                            pass
+                    if label_text_annotation:
+                        try:
+                            label_text_annotation.remove()
+                        except Exception:
+                            pass
+                    try:
+                        self.markers.remove(marker)
+                    except ValueError:
+                        pass
+                    break
+
+        self.auto_markers.clear()
+        # Re-sync top axis and redraw
+        if hasattr(self, "ax_top"):
+            self.ax_top.set_xlim(self.a.get_xlim())
+        self.canvas.draw()
+        self.canvas.flush_events()
+
+    def detect_peaks(self, detect_maxima=True, detect_minima=False, replace_auto=True, prominence_pct=5.0, sigma=1.0):
+        """Detect peaks on the currently plotted spectrum and add vertical markers.
+
+        Returns list of x positions detected.
+        """
+        # Ensure scipy is available
+        if find_peaks is None:
+            try:
+                from tkinter import messagebox
+
+                messagebox.showerror(
+                    "Dependency missing",
+                    "scipy is required for peak detection. Install scipy and try again.",
+                    parent=self.master,
+                )
+            except Exception:
+                print("scipy is required for peak detection")
+            return []
+
+        # Get the main plotted line data
+        line = self.current_spectrum_line
+        if line is None:
+            # Fallback: find first non-comparison plotted line
+            lines = self.a.get_lines()
+            if not lines:
+                try:
+                    from tkinter import messagebox
+
+                    messagebox.showwarning(
+                        "No Data",
+                        "No spectrum is currently plotted.",
+                        parent=self.master,
+                    )
+                except Exception:
+                    print("No spectrum is currently plotted.")
+                return []
+
+            line = lines[0]
+
+        x = np.asarray(line.get_xdata())
+        y = np.asarray(line.get_ydata())
+
+        if x.size == 0 or y.size == 0:
+            return []
+
+        # Clear any previous cancellation flag and optionally smooth the signal
+        try:
+            self._detect_cancel.clear()
+        except Exception:
+            pass
+
+        # Optionally smooth the signal for more robust peak detection
+        try:
+            smoothed = gaussian_filter1d(y, sigma=float(sigma)) if gaussian_filter1d else y
+        except Exception:
+            smoothed = y
+
+        detected_positions = []
+
+        max_val = np.max(smoothed) if smoothed.size else 0.0
+        prom = max(0.0, float(prominence_pct) / 100.0 * max_val)
+
+        if detect_maxima:
+            peaks, props = find_peaks(smoothed, prominence=prom, distance=3)
+            for idx in peaks:
+                if self._detect_cancel.is_set():
+                    break
+                xpos = float(x[idx])
+                detected_positions.append(xpos)
+
+        if detect_minima:
+            inv = -smoothed
+            inv_max = np.max(inv) if inv.size else 0.0
+            prom_min = max(0.0, float(prominence_pct) / 100.0 * inv_max)
+            peaks, props = find_peaks(inv, prominence=prom_min, distance=3)
+            for idx in peaks:
+                if self._detect_cancel.is_set():
+                    break
+                xpos = float(x[idx])
+                detected_positions.append(xpos)
+
+        if not detected_positions:
+            return []
+
+        # Optionally replace previous auto markers
+        if replace_auto:
+            try:
+                # Clear previous auto markers but do not cancel this detection
+                self.clear_auto_markers(stop_running=False)
+            except Exception:
+                pass
+
+        # Add markers for detected positions and track them
+        for xpos in detected_positions:
+            if self._detect_cancel.is_set():
+                break
+            created = self.add_marker(xpos)
+            if created is not None:
+                self.auto_markers.append(created)
+
+        # Redraw
+        self.canvas.draw()
+        return detected_positions
 
     def _load_emission_lines(self):
         """Load element emission lines from JSON file"""

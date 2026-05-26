@@ -3,6 +3,7 @@ from tkinter import ttk
 import numpy as np
 import json
 import os
+from spectrometer.storage_paths import migrate_legacy_file
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
@@ -27,8 +28,9 @@ class Calibration:
     def load(self):
         """Load calibration from file"""
         try:
-            if os.path.exists(CALIBRATION_FILE):
-                with open(CALIBRATION_FILE, "r") as f:
+            path = migrate_legacy_file(CALIBRATION_FILE)
+            if path.exists():
+                with open(path, "r") as f:
                     calibration_data = json.load(f)
                     # Ensure we have exactly 4 points
                     if len(calibration_data.get("points", [])) == 4:
@@ -44,7 +46,8 @@ class Calibration:
     def save(self):
         """Save calibration to file"""
         try:
-            with open(CALIBRATION_FILE, "w") as f:
+            path = migrate_legacy_file(CALIBRATION_FILE)
+            with open(path, "w") as f:
                 json.dump(self.calibration_data, f, indent=4)
             return True
         except:

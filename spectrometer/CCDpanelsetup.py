@@ -37,6 +37,7 @@ from PIL import Image, ImageTk
 from spectrometer import CCDserial, CCDfiles, CCDplots
 from spectrometer.calibration import default_calibration
 from utils import plotgraph
+from spectrometer.storage_paths import migrate_legacy_file
 
 # COM settings file
 COM_SETTINGS_FILE = "com_settings.json"
@@ -581,7 +582,13 @@ class BuildPanel(ttk.Frame):
                     print(f"Baseline subtraction error: {e}")
 
             # Plot raw/intensity data directly
-            CCDplot.a.plot(x_values, data, alpha=alpha, color=self.main_plot_color)
+            lines = CCDplot.a.plot(x_values, data, alpha=alpha, color=self.main_plot_color)
+            if lines:
+                CCDplot.current_spectrum_line = lines[0]
+                try:
+                    CCDplot.current_spectrum_line.set_label("spectrum")
+                except Exception:
+                    pass
             CCDplot.a.set_ylabel("Intensity")
             CCDplot.a.set_xlabel(x_label)
             # Set Y-axis range for intensity plot - allow for negative values if baseline subtraction is active
@@ -618,7 +625,13 @@ class BuildPanel(ttk.Frame):
                     print(f"Baseline subtraction error: {e}")
 
             # Plot raw data directly
-            CCDplot.a.plot(x_values, data, alpha=alpha, color=self.main_plot_color)
+            lines = CCDplot.a.plot(x_values, data, alpha=alpha, color=self.main_plot_color)
+            if lines:
+                CCDplot.current_spectrum_line = lines[0]
+                try:
+                    CCDplot.current_spectrum_line.set_label("spectrum")
+                except Exception:
+                    pass
             CCDplot.a.set_ylabel("ADCcount")
             CCDplot.a.set_xlabel(x_label)
             # Set Y-axis range for raw data plot - allow for negative values if baseline subtraction is active
@@ -751,6 +764,73 @@ class BuildPanel(ttk.Frame):
         """Toggle the spectrum color background"""
         self.CCDplot.set_show_colors(self.show_colors.get())
 
+    def run_detect_peaks(self, CCDplot: CCDplots.BuildPlot):
+        """Read UI options and invoke the plot-layer peak detector."""
+        try:
+            detect_max = bool(self.detect_maxima_var.get())
+            detect_min = bool(self.detect_minima_var.get())
+
+            replace_auto = bool(self.replace_auto_var.get())
+
+            # Read single tolerance control and map to detector parameters
+            if hasattr(self, "tolerance_var"):
+                tol = float(self.tolerance_var.get())
+            else:
+                tol = 25.0
+
+            # Map tolerance (0..100) to prominence_pct and sigma heuristically
+            # Higher tolerance -> more sensitive -> smaller prominence & smoothing
+            s = max(0.0, min(1.0, tol / 100.0))
+            # prominence range: [0.1 .. 6.7] (smaller -> more sensitive)
+            prominence_pct = max(0.1, (1.0 - s) * 6.7)
+            # sigma range: [1.0 .. 5.0] (smaller -> more sensitive)
+            sigma = 1.0 + (1.0 - s) * 4.0
+
+            positions = CCDplot.detect_peaks(
+                detect_maxima=detect_max,
+                detect_minima=detect_min,
+                replace_auto=replace_auto,
+                prominence_pct=prominence_pct,
+                sigma=sigma,
+            )
+
+            # If peaks were detected, do not show a popup; markers are drawn directly.
+            if positions:
+                pass
+            else:
+                # Show a short-lived, non-blocking popup for no-peaks feedback
+                try:
+                    popup = tk.Toplevel(self.master)
+                    popup.wm_overrideredirect(True)
+                    popup.attributes("-topmost", True)
+                    lbl = ttk.Label(popup, text="No peaks detected", relief="solid", padding=8)
+                    lbl.pack()
+                    # Position popup centered over main window
+                    try:
+                        self.master.update_idletasks()
+                        mx = self.master.winfo_rootx()
+                        my = self.master.winfo_rooty()
+                        mw = self.master.winfo_width()
+                        mh = self.master.winfo_height()
+                        pw = popup.winfo_reqwidth()
+                        ph = popup.winfo_reqheight()
+                        popup.geometry(f"+{mx + mw//2 - pw//2}+{my + mh//2 - ph//2}")
+                    except Exception:
+                        pass
+                    # Auto-destroy after 1.5 seconds
+                    popup.after(1500, popup.destroy)
+                except Exception:
+                    try:
+                        messagebox.showinfo(
+                            "No peaks",
+                            "No peaks were detected with current settings.",
+                            parent=self.master,
+                        )
+                    except Exception:
+                        print("No peaks were detected.")
+        except Exception as e:
+            messagebox.showerror("Detection error", str(e), parent=self.master)
+
     def collectmodefields(self, continuous_row):
         # collect mode - variables, widgets and traces associated with the collect mode
         # variables
@@ -776,6 +856,20 @@ class BuildPanel(ttk.Frame):
         self.rcontinuous.grid(column=1, row=continuous_row + 1, sticky="w", padx=5)
         # set initial state
         self.CONTvar.set(self.CCDplot.config.avg_n[0])
+
+    def _tol_entry_commit(self, event=None):
+        """Validate and commit a value typed into the tolerance entry."""
+        try:
+            v = float(self.tolerance_var.get())
+        except Exception:
+            v = 25.0
+        # Clamp
+        v = max(0.0, min(100.0, v))
+        # Round to integer for clarity
+        v = round(v)
+        self.tolerance_var.set(v)
+
+    
 
     def avgfields(self, avg_row):
         # average - variables, widgets and traces associated with the average slider
@@ -1037,83 +1131,91 @@ class BuildPanel(ttk.Frame):
         self.bsave_regression.grid(column=1, row=save_row + 2, sticky="e", padx=(0, 5))
 
         # Add save icon overlay to the regression save button
+        # (optional overlay removed — not critical)
+
+        # Peak detection controls (compact, placed near save/open)
         try:
-            # Clear PIL image cache to force reload
-            Image.preinit()
-            Image.init()
+            # Use a plain frame (no labelled border) to avoid the gray box
+            self.peak_frame = ttk.Frame(self, padding=6)
+            # Place peak controls below the other save/open controls to avoid overlap
+            self.peak_frame.grid(column=0, row=save_row + 8, columnspan=2, pady=(8, 6), sticky="w", padx=5)
 
-            base_dir = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), "assets"
+            self.detect_maxima_var = tk.IntVar(value=1)
+            self.detect_minima_var = tk.IntVar(value=0)
+            self.replace_auto_var = tk.IntVar(value=1)
+
+
+            # Sensitivity controls: single tolerance slider (0..100)
+            self.tolerance_var = tk.DoubleVar(value=25.0)
+
+            ttk.Checkbutton(
+                self.peak_frame,
+                text="Maxima",
+                variable=self.detect_maxima_var,
+                onvalue=1,
+                offvalue=0,
+            ).grid(row=0, column=0, padx=(2, 6), sticky="w")
+
+            ttk.Checkbutton(
+                self.peak_frame,
+                text="Minima",
+                variable=self.detect_minima_var,
+                onvalue=1,
+                offvalue=0,
+            ).grid(row=0, column=1, padx=(2, 6), sticky="w")
+
+            # Single tolerance slider replaces prominence + smoothing for simplicity
+            ttk.Label(self.peak_frame, text="Tolerance", width=12).grid(
+                row=1, column=0, sticky="e", padx=(2, 4), pady=(6, 0)
             )
-            save_icon_black_path = os.path.join(base_dir, "save.png")
-            save_icon_white_path = os.path.join(base_dir, "save_white.png")
+            self.tolerance_scale = ttk.Scale(
+                self.peak_frame,
+                from_=0,
+                to=100,
+                orient=tk.HORIZONTAL,
+                length=180,
+                variable=self.tolerance_var,
+                command=lambda v: self.tolerance_var.set(float(v)),
+            )
+            self.tolerance_scale.grid(row=1, column=1, sticky="w", padx=(0, 4), pady=(6, 0))
 
-            # Load and prepare both black and white icons
-            self.reg_save_icon_black = None
-            self.reg_save_icon_white = None
-
-            if os.path.exists(save_icon_black_path):
-                # Force reload by opening with explicit mode
-                save_icon_image = Image.open(save_icon_black_path)
-                save_icon_image.load()  # Force load the image data
-                save_icon_image = save_icon_image.convert("RGBA")
-
-                # Make the icon solid black while preserving transparency
+            # Inline editable numeric field (flat) bound to the same variable
+            # Use tk.Entry with flat relief and matching background to avoid boxed look
+            try:
+                bg = self.peak_frame.cget("background")
+            except Exception:
                 try:
-                    save_alpha = save_icon_image.getchannel("A")
+                    bg = self.master.cget("bg")
                 except Exception:
-                    save_alpha = save_icon_image.convert("L")
-                save_black_img = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 255))
-                save_icon_solid = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 0))
-                save_icon_solid.paste(save_black_img, (0, 0), mask=save_alpha)
+                    bg = None
 
-                # Resize icon
-                target_size = (16, 16)
-                try:
-                    resample = Image.Resampling.LANCZOS
-                except Exception:
-                    resample = Image.LANCZOS  # type: ignore for backward compatibility
-                save_icon_resized = save_icon_solid.resize(target_size, resample)
-                self.reg_save_icon_black = ImageTk.PhotoImage(save_icon_resized)
+            entry_kwargs = dict(textvariable=self.tolerance_var, width=5)
+            if bg is not None:
+                entry_kwargs.update(dict(bg=bg))
 
-            if os.path.exists(save_icon_white_path):
-                # Force reload by opening with explicit mode
-                save_icon_white_image = Image.open(save_icon_white_path)
-                save_icon_white_image.load()  # Force load the image data
-                save_icon_white_image = save_icon_white_image.convert("RGBA")
+            self._tol_entry = tk.Entry(self.peak_frame, bd=0, relief="flat", highlightthickness=0, **entry_kwargs)
+            self._tol_entry.grid(row=1, column=2, sticky="w", padx=(0, 2), pady=(6, 0))
+            # Commit on Enter or focus out
+            self._tol_entry.bind("<Return>", lambda e: self._tol_entry_commit())
+            self._tol_entry.bind("<FocusOut>", lambda e: self._tol_entry_commit())
 
-                # Make the icon solid white while preserving transparency
-                try:
-                    save_white_alpha = save_icon_white_image.getchannel("A")
-                except Exception:
-                    save_white_alpha = save_icon_white_image.convert("L")
-                save_white_img = Image.new(
-                    "RGBA", save_icon_white_image.size, (255, 255, 255, 255)
-                )
-                save_icon_white_solid = Image.new(
-                    "RGBA", save_icon_white_image.size, (0, 0, 0, 0)
-                )
-                save_icon_white_solid.paste(
-                    save_white_img, (0, 0), mask=save_white_alpha
-                )
+            ttk.Button(
+                self.peak_frame,
+                text="Detect peaks",
+                style="Accent.TButton",
+                width=12,
+                command=lambda CCDplot=CCDplot: self.run_detect_peaks(CCDplot),
+            ).grid(row=3, column=0, padx=(5, 2), pady=(8, 0))
 
-                # Resize icon
-                target_size = (16, 16)
-                try:
-                    resample = Image.Resampling.LANCZOS
-                except Exception:
-                    resample = Image.LANCZOS  # type: ignore for backward compatibility
-                save_icon_white_resized = save_icon_white_solid.resize(
-                    target_size, resample
-                )
-                self.reg_save_icon_white = ImageTk.PhotoImage(save_icon_white_resized)
-
-            # Resolve the background color of the accent button so the overlay blends in
-            # Initialize button appearance and helper for swapping enabled/disabled icons
-            self.bsave_regression.config(compound="center", padding=(4, 2))
-            self._set_reg_save_enabled(False)
-        except Exception as e:
-            print(f"Could not create regression save icon: {e}")
+            ttk.Button(
+                self.peak_frame,
+                text="Clear auto markers",
+                style="Accent.TButton",
+                width=16,
+                command=lambda CCDplot=CCDplot: CCDplot.clear_auto_markers(stop_running=True),
+            ).grid(row=3, column=1, columnspan=2, padx=(2, 5), pady=(8, 0))
+        except Exception:
+            pass
         # Trace the checkbox so we can enable/disable the slider dynamically
         # Also trigger a plot update so the regression overlay appears immediately
         self.ph_checkbox_var.trace_add(
@@ -1237,8 +1339,9 @@ class BuildPanel(ttk.Frame):
     def load_com_settings(self):
         """Load COM settings from file"""
         try:
-            if os.path.exists(COM_SETTINGS_FILE):
-                with open(COM_SETTINGS_FILE, "r") as f:
+            path = migrate_legacy_file(COM_SETTINGS_FILE)
+            if path.exists():
+                with open(path, "r") as f:
                     settings = json.load(f)
                     self.CCDplot.config.port = settings.get(
                         "port", self.CCDplot.config.port
@@ -1258,7 +1361,8 @@ class BuildPanel(ttk.Frame):
                 "port": self.device_address.get(),
                 "firmware": self.firmware_type.get(),
             }
-            with open(COM_SETTINGS_FILE, "w") as f:
+            path = migrate_legacy_file(COM_SETTINGS_FILE)
+            with open(path, "w") as f:
                 json.dump(settings, f, indent=4)
             # Update config
             self.CCDplot.config.port = self.device_address.get()
