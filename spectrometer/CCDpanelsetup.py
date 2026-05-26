@@ -912,25 +912,18 @@ class BuildPanel(ttk.Frame):
         self.lavg.grid(column=0, row=avg_row, sticky="e")
         # Use an IntVar bound to the scale so we can provide inline editing
         self.AVG_var = tk.IntVar(value=int(self.CCDplot.config.avg_n[1]))
+        self.AVG_frame = ttk.Frame(self)
+        self.AVG_frame.grid(column=1, row=avg_row, padx=5, pady=5, sticky="w")
         self.AVGscale = ttk.Scale(
-            self,
+            self.AVG_frame,
             from_=1,
             to=255,
             orient=tk.HORIZONTAL,
-            length=200,
+            length=170,
             variable=self.AVG_var,
             command=self.AVGcallback,
         )
-        self.AVGscale.grid(column=1, row=avg_row, padx=5, pady=5, sticky="w")
-
-        # Inline editable flat entry for the numeric value
-        try:
-            bg = self.cget("background")
-        except Exception:
-            bg = None
-        entry_kwargs = dict(textvariable=self.AVG_var, width=6)
-        if bg is not None:
-            entry_kwargs.update(dict(bg=bg))
+        self.AVGscale.pack(side=tk.LEFT)
 
         # Inline numeric entry with explicit fg/bg for visibility across themes
         try:
@@ -940,9 +933,8 @@ class BuildPanel(ttk.Frame):
                 bg = self.master.cget("bg")
             except Exception:
                 bg = "#ffffff"
-        fg = self._contrast_fg(bg)
-        self.AVG_entry = tk.Entry(self, textvariable=self.AVG_var, width=6, bd=0, relief="flat", highlightthickness=0, bg=bg, fg=fg)
-        self.AVG_entry.grid(column=2, row=avg_row, padx=5, pady=5, sticky="w")
+        self.AVG_entry = tk.Entry(self.AVG_frame, textvariable=self.AVG_var, width=6, bd=0, relief="flat", highlightthickness=0, bg=bg, fg="#ffffff")
+        self.AVG_entry.pack(side=tk.LEFT, padx=(6, 0))
         try:
             self.AVG_entry.lift()
         except Exception:
@@ -1210,6 +1202,46 @@ class BuildPanel(ttk.Frame):
         except Exception:
             pass
 
+        try:
+            base_dir = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "assets"
+            )
+            black_icon_path = os.path.join(base_dir, "save.png")
+            white_icon_path = os.path.join(base_dir, "save_white.png")
+
+            self.reg_save_icon_black = None
+            self.reg_save_icon_white = None
+
+            try:
+                resample = Image.Resampling.LANCZOS
+            except Exception:
+                resample = Image.LANCZOS  # type: ignore for backward compatibility
+
+            if os.path.exists(black_icon_path):
+                save_icon_image = Image.open(black_icon_path).convert("RGBA")
+                try:
+                    save_alpha = save_icon_image.getchannel("A")
+                except Exception:
+                    save_alpha = save_icon_image.convert("L")
+                save_black_img = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 255))
+                save_icon_solid = Image.new("RGBA", save_icon_image.size, (0, 0, 0, 0))
+                save_icon_solid.paste(save_black_img, (0, 0), mask=save_alpha)
+                self.reg_save_icon_black = ImageTk.PhotoImage(
+                    save_icon_solid.resize((16, 16), resample)
+                )
+
+            if os.path.exists(white_icon_path):
+                white_icon_image = Image.open(white_icon_path).convert("RGBA")
+                self.reg_save_icon_white = ImageTk.PhotoImage(
+                    white_icon_image.resize((16, 16), resample)
+                )
+
+            if self.reg_save_icon_white:
+                self.bsave_regression.config(image=self.reg_save_icon_white)
+                self.bsave_regression.image = self.reg_save_icon_white  # type: ignore keep reference
+        except Exception as e:
+            print(f"Could not create regression save icon: {e}")
+
         # Add save icon overlay to the regression save button
         # (optional overlay removed — not critical)
 
@@ -1277,7 +1309,7 @@ class BuildPanel(ttk.Frame):
             self._tol_entry.grid(row=1, column=2, sticky="w", padx=(0, 2), pady=(6, 0))
             try:
                 self._tol_entry.lift()
-                self._tol_entry.configure(fg="black")
+                self._tol_entry.configure(fg="#ffffff")
             except Exception:
                 pass
             # Commit on Enter or focus out
@@ -1316,30 +1348,25 @@ class BuildPanel(ttk.Frame):
         self.lphslider.grid(column=0, row=save_row + 3, sticky="e", padx=(0, 0))
         # Regression strength slider with editable numeric field
         self.ph_var = tk.DoubleVar(value=100.0)
+        self.ph_slider_frame = ttk.Frame(self)
+        self.ph_slider_frame.grid(column=1, row=save_row + 3, padx=(0, 5), pady=5, sticky="w")
         self.ph_scale = ttk.Scale(
-            self,
+            self.ph_slider_frame,
             from_=10,
             to=1000,
             orient=tk.HORIZONTAL,
-            length=200,
+            length=170,
             variable=self.ph_var,
             command=self._phslider_callback,
         )
-        self.ph_scale.grid(column=1, row=save_row + 3, padx=(0, 5), pady=5, sticky="w")
+        self.ph_scale.pack(side=tk.LEFT)
         # Update plot only when mouse is released to avoid lag during dragging
         self.ph_scale.bind(
             "<ButtonRelease-1>",
             lambda e, CCDplot=CCDplot: self._on_regression_release(CCDplot),
         )
-        # Inline editable entry for the raw slider value (10..1000)
-        try:
-            bg = self.cget("background")
-        except Exception:
-            bg = None
-        entry_kwargs = dict(textvariable=self.ph_var, width=8)
-        if bg is not None:
-            entry_kwargs.update(dict(bg=bg))
 
+        # Inline editable entry for the raw slider value (10..1000)
         try:
             bg = self.cget("background")
         except Exception:
@@ -1347,9 +1374,8 @@ class BuildPanel(ttk.Frame):
                 bg = self.master.cget("bg")
             except Exception:
                 bg = "#ffffff"
-        fg = self._contrast_fg(bg)
-        self.ph_entry = tk.Entry(self, textvariable=self.ph_var, width=8, bd=0, relief="flat", highlightthickness=0, bg=bg, fg=fg)
-        self.ph_entry.grid(column=2, row=save_row + 3, padx=0, pady=5, sticky="w")
+        self.ph_entry = tk.Entry(self.ph_slider_frame, textvariable=self.ph_var, width=8, bd=0, relief="flat", highlightthickness=0, bg=bg, fg="#ffffff")
+        self.ph_entry.pack(side=tk.LEFT, padx=(6, 0))
         try:
             self.ph_entry.lift()
         except Exception:
@@ -1365,25 +1391,18 @@ class BuildPanel(ttk.Frame):
         self.lopacity.grid(column=0, row=save_row + 4, sticky="e", padx=(0, 0))
         # Opacity slider with inline editable percent field
         self.opacity_var = tk.DoubleVar(value=100.0)
+        self.opacity_slider_frame = ttk.Frame(self)
+        self.opacity_slider_frame.grid(column=1, row=save_row + 4, padx=(0, 5), pady=5, sticky="w")
         self.opacity_scale = ttk.Scale(
-            self,
+            self.opacity_slider_frame,
             from_=0,
             to=100,
             orient=tk.HORIZONTAL,
-            length=200,
+            length=170,
             variable=self.opacity_var,
             command=self._opacity_callback,
         )
-        self.opacity_scale.grid(
-            column=1, row=save_row + 4, padx=(0, 5), pady=5, sticky="w"
-        )
-        try:
-            bg = self.cget("background")
-        except Exception:
-            bg = None
-        entry_kwargs = dict(textvariable=self.opacity_var, width=6)
-        if bg is not None:
-            entry_kwargs.update(dict(bg=bg))
+        self.opacity_scale.pack(side=tk.LEFT)
         try:
             bg = self.cget("background")
         except Exception:
@@ -1391,9 +1410,8 @@ class BuildPanel(ttk.Frame):
                 bg = self.master.cget("bg")
             except Exception:
                 bg = "#ffffff"
-        fg = self._contrast_fg(bg)
-        self.opacity_entry = tk.Entry(self, textvariable=self.opacity_var, width=6, bd=0, relief="flat", highlightthickness=0, bg=bg, fg=fg)
-        self.opacity_entry.grid(column=2, row=save_row + 4, padx=5, pady=5, sticky="w")
+        self.opacity_entry = tk.Entry(self.opacity_slider_frame, textvariable=self.opacity_var, width=6, bd=0, relief="flat", highlightthickness=0, bg=bg, fg="#ffffff")
+        self.opacity_entry.pack(side=tk.LEFT, padx=(6, 0))
         try:
             self.opacity_entry.lift()
         except Exception:
