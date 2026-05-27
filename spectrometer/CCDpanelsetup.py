@@ -33,6 +33,7 @@ import webbrowser
 import json
 import os
 from PIL import Image, ImageTk
+import platform
 
 from spectrometer import CCDserial, CCDfiles, CCDplots
 from spectrometer.calibration import default_calibration
@@ -1046,6 +1047,10 @@ class BuildPanel(ttk.Frame):
                 bg = self.master.cget("bg")
             except Exception:
                 bg = "#ffffff"
+        # On Windows the default background can be white even in dark themes;
+        # force a dark gray background for slider numeric entries on Windows.
+        if platform.system() == "Windows":
+            bg = "#3a3a3a"
         self.AVG_entry = tk.Entry(self.AVG_frame, textvariable=self.AVG_var, width=6, bd=0, relief="flat", highlightthickness=0, bg=bg, fg="#ffffff")
         self.AVG_entry.pack(side=tk.LEFT, padx=(6, 0))
         try:
@@ -1413,7 +1418,9 @@ class BuildPanel(ttk.Frame):
                     bg = self.master.cget("bg")
                 except Exception:
                     bg = None
-
+            # On Windows force a dark background for visibility
+            if platform.system() == "Windows":
+                bg = "#3a3a3a"
             entry_kwargs = dict(textvariable=self.tolerance_var, width=5)
             if bg is not None:
                 entry_kwargs.update(dict(bg=bg))
@@ -1506,10 +1513,28 @@ class BuildPanel(ttk.Frame):
                 bg = self.master.cget("bg")
             except Exception:
                 bg = "#ffffff"
-        self.ph_entry = tk.Entry(self.ph_slider_frame, textvariable=self.ph_var, width=8, bd=0, relief="flat", highlightthickness=0, bg=bg, fg="#ffffff")
+        if platform.system() == "Windows":
+            bg = "#3a3a3a"
+        self.ph_entry = tk.Entry(
+            self.ph_slider_frame,
+            textvariable=self.ph_var,
+            width=8,
+            bd=0,
+            relief="flat",
+            highlightthickness=0,
+            bg=bg,
+            fg="#ffffff",
+            disabledbackground=bg,
+            disabledforeground="#ffffff",
+        )
         self.ph_entry.pack(side=tk.LEFT, padx=(6, 0))
         try:
             self.ph_entry.lift()
+            # Ensure colors are applied on Windows where themeing can override
+            try:
+                self.ph_entry.configure(bg=bg, fg="#ffffff", insertbackground="#ffffff", disabledbackground=bg, disabledforeground="#ffffff")
+            except Exception:
+                pass
         except Exception:
             pass
         self.ph_entry.bind("<Return>", lambda e: self._ph_entry_commit())
@@ -1542,6 +1567,8 @@ class BuildPanel(ttk.Frame):
                 bg = self.master.cget("bg")
             except Exception:
                 bg = "#ffffff"
+        if platform.system() == "Windows":
+            bg = "#3a3a3a"
         self.opacity_entry = tk.Entry(self.opacity_slider_frame, textvariable=self.opacity_var, width=6, bd=0, relief="flat", highlightthickness=0, bg=bg, fg="#ffffff")
         self.opacity_entry.pack(side=tk.LEFT, padx=(6, 0))
         try:
