@@ -13,6 +13,7 @@ a = Analysis(
         ('assets/lens.png', 'assets'),
         ('assets/image_icon.png', 'assets'),
         ('element_emission_lines.json', '.'),
+        ('nist_line_catalog.json', '.'),
     ],
     hiddenimports=[],
     hookspath=[],

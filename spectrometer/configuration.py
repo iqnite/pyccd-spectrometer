@@ -37,6 +37,10 @@ class Config:
         # Spectroscopy mode configuration
         self.spectroscopy_mode = False  # False = regular mode, True = spectroscopy mode
         self.calibration_coeffs = [0, 1, 0, 0]  # fallback linear
+        # Default to the NIST-derived offline catalog (falls back to legacy file if needed)
+        self.line_catalog_file = "nist_line_catalog.json"
+        self.line_match_max_distance_nm = 3.0
+        self.line_match_min_score = 0.1
 
         # Emission line matching tolerance (in nm)
         self.green_tolerance_nm = (

@@ -3,7 +3,6 @@ import numpy as np
 import threading
 import tkinter as tk
 from tkinter import ttk
-import json
 import os
 import sys
 
@@ -12,6 +11,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.figure import Figure
 from spectrometer import calibration, configuration
+from spectrometer.line_matching import load_line_catalog, score_peak_against_lines
 from spectrometer.spectrum_gradient import update_spectrum_background
 
 # Optional imports for peak detection
@@ -640,29 +640,9 @@ class BuildPlot(ttk.Frame):
         return detected_positions
 
     def _load_emission_lines(self):
-        """Load element emission lines from JSON file"""
+        """Load element emission lines from the catalog file."""
         try:
-            # Determine base path (works in both dev and frozen PyInstaller environments)
-            if getattr(sys, "frozen", False):
-                # Running as compiled executable
-                base_path = getattr(sys, "_MEIPASS", os.path.dirname(__file__))
-            else:
-                # Running as script - go up one level from spectrometer/ to project root
-                base_path = os.path.dirname(os.path.dirname(__file__))
-
-            json_path = os.path.join(base_path, "element_emission_lines.json")
-
-            with open(json_path, "r") as f:
-                data = json.load(f)
-
-            # Create list of (wavelength, element) tuples
-            wavelength_elements = []
-            for element, wavelengths in data.items():
-                for wavelength in wavelengths:
-                    wavelength_elements.append((wavelength, element))
-
-            # Sort by wavelength
-            return sorted(wavelength_elements, key=lambda x: x[0])
+            return load_line_catalog(self.config.line_catalog_file)
         except Exception as e:
             print(f"Error loading emission lines: {e}")
             return []
@@ -675,53 +655,26 @@ class BuildPlot(ttk.Frame):
         if not self.emission_lines or not self.config.spectroscopy_mode:
             return ("red", [])
 
-        # Find all emission lines and calculate match percentages
-        element_matches = []
+        best_by_element: dict[str, float] = {}
+        for match in score_peak_against_lines(
+            float(wavelength),
+            self.emission_lines,
+            max_distance_nm=self.config.line_match_max_distance_nm,
+            min_score=self.config.line_match_min_score,
+        ):
+            pct = max(0.0, min(100.0, match.score * 100.0))
+            prev = best_by_element.get(match.line.element)
+            if prev is None or pct > prev:
+                best_by_element[match.line.element] = pct
 
-        for emission_wavelength, element in self.emission_lines:
-            distance = abs(wavelength - emission_wavelength)
+        if best_by_element:
+            sorted_elements = sorted(best_by_element.items(), key=lambda t: (-t[1], t[0]))
+            best_match = sorted_elements[0][1]
+            color = "green" if best_match >= 90 else "#ffc200"
+            # Limit to top candidates so labels stay readable with large catalogs
+            return (color, sorted_elements[:5])
 
-            # Calculate match percentage based on distance
-            # Use configurable thresholds from config
-            green_threshold = self.config.green_tolerance_nm
-            yellow_threshold = self.config.yellow_tolerance_nm
-
-            if distance <= green_threshold:
-                # Within green tolerance: 90-100% match
-                match_percentage = 100 - (distance / green_threshold) * 10
-            elif distance <= yellow_threshold:
-                # Within yellow tolerance: 80-90% match
-                match_percentage = (
-                    90
-                    - (
-                        (distance - green_threshold)
-                        / (yellow_threshold - green_threshold)
-                    )
-                    * 10
-                )
-            else:
-                # Beyond yellow tolerance, skip this element
-                continue
-
-            # Only include matches >= 80%
-            if match_percentage >= 80:
-                element_matches.append((element, match_percentage, distance))
-
-        # Sort by match percentage (highest first), then by distance if tied
-        element_matches.sort(key=lambda x: (-x[1], x[2]))
-
-        # Determine color based on best match percentage
-        if element_matches:
-            best_match = element_matches[0][1]
-            if best_match >= 90:
-                color = "green"
-            else:  # >= 80
-                color = "#ffc200"
-
-            # Return color and list of (element, percentage) tuples
-            return (color, [(elem, pct) for elem, pct, _ in element_matches])
-        else:
-            return ("red", [])
+        return ("red", [])
 
     def update_marker_colors(self, enabled):
         """Update marker colors based on element matching setting"""

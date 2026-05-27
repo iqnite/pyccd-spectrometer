@@ -164,10 +164,32 @@ class BuildPanel(ttk.Frame):
         # Update emission line color control availability
         self.update_emission_color_controls()
 
+        # Enable/disable peak identification based on mode
+        self.update_identify_peaks_controls()
+
         # Update spectrum colors when mode changes
         self.CCDplot.set_show_colors(self.show_colors.get())
         self.update_intensity_correction_controls()
         self.CCDplot.canvas.draw()
+
+    def update_identify_peaks_controls(self):
+        """Enable the Identify Peaks button only in spectroscopy mode."""
+        button = getattr(self, "bidentify_peaks", None)
+        if not button:
+            return
+
+        try:
+            if self.CCDplot.config.spectroscopy_mode:
+                button.state(["!disabled"])
+            else:
+                button.state(["disabled"])
+        except Exception:
+            try:
+                button.configure(
+                    state=(tk.NORMAL if self.CCDplot.config.spectroscopy_mode else tk.DISABLED)
+                )
+            except Exception:
+                pass
 
     def update_plot_axis(self):
         """Update the plot axis based on current mode"""
@@ -827,10 +849,14 @@ class BuildPanel(ttk.Frame):
                 prominence_pct=prominence_pct,
                 sigma=sigma,
             )
-
             # If peaks were detected, do not show a popup; markers are drawn directly.
             if positions:
-                pass
+                # If element matching is enabled, run the identification dialog
+                try:
+                    if CCDplot.config.spectroscopy_mode and bool(self.element_match_var.get()):
+                        self.run_identify_peaks(CCDplot, positions=positions)
+                except Exception:
+                    pass
             else:
                 # Show a short-lived, non-blocking popup for no-peaks feedback
                 try:
@@ -864,6 +890,93 @@ class BuildPanel(ttk.Frame):
                         print("No peaks were detected.")
         except Exception as e:
             messagebox.showerror("Detection error", str(e), parent=self.master)
+
+    def run_identify_peaks(self, CCDplot: CCDplots.BuildPlot, positions: list[float] | None = None):
+        """Run the line matcher on provided positions (or current markers) and show results."""
+        if not getattr(CCDplot, "config", None) or not bool(getattr(CCDplot.config, "spectroscopy_mode", False)):
+            try:
+                from tkinter import messagebox
+
+                messagebox.showinfo(
+                    "Identify peaks",
+                    "Peak identification is available in Spectroscopy mode only.",
+                    parent=self.master,
+                )
+            except Exception:
+                pass
+            return
+
+        try:
+            from spectrometer.line_matching import load_line_catalog, rank_elements_for_peaks
+            from spectrometer.identification_panel import IdentificationDialog
+        except Exception as e:
+            print(f"Identification dependencies missing: {e}")
+            return
+
+        # If positions not provided, try to collect from auto markers, then manual markers
+        if positions is None:
+            positions = []
+            try:
+                # auto markers are stored as Line2D objects in CCDplot.auto_markers
+                auto_set = set(CCDplot.auto_markers)
+                for line, label_text, x_pos, element_text, label_text_obj in CCDplot.markers:
+                    if line in auto_set:
+                        positions.append(float(x_pos))
+                if not positions:
+                    # fallback to any markers
+                    positions = [float(m[2]) for m in CCDplot.markers]
+            except Exception:
+                positions = []
+
+        if not positions:
+            try:
+                from tkinter import messagebox
+
+                messagebox.showinfo(
+                    "Identify peaks",
+                    "No markers available to identify.",
+                    parent=self.master,
+                )
+            except Exception:
+                print("No markers available to identify.")
+            return
+
+        # Load catalog and run ranking (prefer the plot's already-loaded catalog)
+        try:
+            lines = getattr(CCDplot, "emission_lines", None)
+            if not lines:
+                lines = load_line_catalog(self.CCDplot.config.line_catalog_file)
+            # Sample intensities at the detected positions so the matcher can
+            # weigh intensity agreements. Positions are x-values on the plotted line.
+            peaks_with_intensity = []
+            try:
+                import numpy as _np
+
+                line = self.CCDplot.current_spectrum_line
+                if line is not None:
+                    x = _np.asarray(line.get_xdata())
+                    y = _np.asarray(line.get_ydata())
+                    for p in positions:
+                        # find nearest index
+                        idx = int(_np.argmin(_np.abs(x - float(p))))
+                        intensity = float(y[idx]) if idx >= 0 and idx < y.size else 1.0
+                        peaks_with_intensity.append((float(p), intensity))
+                else:
+                    peaks_with_intensity = [(float(p), 1.0) for p in positions]
+            except Exception:
+                peaks_with_intensity = [(float(p), 1.0) for p in positions]
+
+            ranked = rank_elements_for_peaks(
+                peaks_with_intensity, lines, max_distance_nm=self.CCDplot.config.line_match_max_distance_nm
+            )
+        except Exception as e:
+            print(f"Error running matcher: {e}")
+            ranked = []
+
+        try:
+            IdentificationDialog(self.master, positions, ranked, self.CCDplot.config, lines)
+        except Exception as e:
+            print(f"Error showing identification dialog: {e}")
 
     def collectmodefields(self, continuous_row):
         # collect mode - variables, widgets and traces associated with the collect mode
@@ -1316,21 +1429,40 @@ class BuildPanel(ttk.Frame):
             self._tol_entry.bind("<Return>", lambda e: self._tol_entry_commit())
             self._tol_entry.bind("<FocusOut>", lambda e: self._tol_entry_commit())
 
-            ttk.Button(
+            self.bdetect_peaks = ttk.Button(
                 self.peak_frame,
                 text="Detect peaks",
                 style="Accent.TButton",
                 width=12,
                 command=lambda CCDplot=CCDplot: self.run_detect_peaks(CCDplot),
-            ).grid(row=3, column=0, padx=(5, 2), pady=(8, 0))
+            )
+            self.bdetect_peaks.grid(row=3, column=0, padx=(5, 2), pady=(8, 0))
 
-            ttk.Button(
+            self.bclear_auto_markers = ttk.Button(
                 self.peak_frame,
                 text="Clear auto markers",
                 style="Accent.TButton",
-                width=16,
+                width=12,
                 command=lambda CCDplot=CCDplot: CCDplot.clear_auto_markers(stop_running=True),
-            ).grid(row=3, column=1, columnspan=2, padx=(2, 5), pady=(8, 0))
+            )
+            self.bclear_auto_markers.grid(row=3, column=1, padx=(2, 2), pady=(8, 0))
+
+            # Place Identify below to avoid widening the sidebar.
+            self.bidentify_peaks = ttk.Button(
+                self.peak_frame,
+                text="Identify peaks",
+                style="Accent.TButton",
+                width=12,
+                state=(tk.NORMAL if self.CCDplot.config.spectroscopy_mode else tk.DISABLED),
+                command=lambda CCDplot=CCDplot: self.run_identify_peaks(CCDplot),
+            )
+            self.bidentify_peaks.grid(row=4, column=0, columnspan=2, padx=(5, 2), pady=(6, 0), sticky="w")
+
+            # Ensure the Identify button reflects the current mode
+            try:
+                self.update_identify_peaks_controls()
+            except Exception:
+                pass
         except Exception:
             pass
         # Trace the checkbox so we can enable/disable the slider dynamically
