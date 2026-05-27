@@ -21,17 +21,6 @@ After that, you can run the application using:
 pipenv run python3 main.pyw
 ```
 
-## NIST line catalog (offline)
-
-pySPEC can match detected peaks against an offline line catalog derived from the NIST Atomic Spectra Database (ASD).
-
-- Default catalog file: `nist_line_catalog.json`
-- Regenerate/update the catalog (downloads from NIST ASD and writes the JSON file):
-
-```bash
-python3 scripts/import_nist_asd_lines.py --from-legacy --low-nm 350 --upp-nm 750 --output nist_line_catalog.json
-```
-
 ## Utils
 
 In the utils folder one can find a script named "plotgraph.py". This file can be used to open the .dat files which are generated when saving a graph via pySPEC. It creates a new folder at the lcoation of the .dat file, which includes a .csv file aswell as a .png of the plotted graphs.
